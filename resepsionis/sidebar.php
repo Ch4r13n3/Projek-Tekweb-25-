@@ -55,6 +55,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <h6 class="px-3 pt-6 pb-2 text-xs font-semibold uppercase text-gray-500 border-t border-gray-800 mt-4">OPERASIONAL</h6>
         
         <li>
+            <a href="alokasi_kamar.php" 
+               class="flex items-center p-3 rounded-lg transition-colors 
+               <?= (isset($_GET['status']) && $_GET['status'] == 'Belum Dialokasi') ? 'bg-sky-600 text-white shadow-lg' : 'hover:bg-gray-800 text-gray-400' ?>">
+                <i class="fas fa-bed mr-3 w-5"></i>Alokasi Kamar
+            </a>
+        </li>
+        
+        <li>
             <a href="reservasi_list.php?status=checkin" 
                class="flex items-center p-3 rounded-lg transition-colors 
                <?= (isset($_GET['status']) && $_GET['status'] == 'checkin') ? 'bg-sky-600 text-white shadow-lg' : 'hover:bg-gray-800 text-gray-400' ?>">

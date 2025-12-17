@@ -49,6 +49,9 @@ if ($cek_tabel && $cek_tabel->num_rows > 0) {
     $stmt_uang->close();
 }
 
+$sql = "SELECT SUM(total_bayar) AS total_pendapatan FROM reservasi WHERE status_pembayaran = 'Lunas'";
+$result = $conn->query($sql);
+$data = $result->fetch_assoc();
 
 // =========================================================
 // == LOGIKA DENAH KAMAR (PER LANTAI) ==
@@ -116,7 +119,7 @@ if (isset($conn)) {
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-sm font-medium text-gray-500">Pendapatan (Bulan Ini)</h3>
                     </div>
-                    <p class="text-2xl font-bold text-gray-800">Rp <?php echo number_format($total_pendapatan_bulan_ini, 0, ',', '.'); ?></p>
+                    <p class="text-2xl font-bold text-gray-800">Rp <?php echo number_format($data['total_pendapatan'], 0, ',', '.'); ?></p>
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">

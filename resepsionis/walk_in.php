@@ -110,6 +110,12 @@ if (isset($_POST['submit_walkin'])) {
             email_pemesan,
             tanggal_pemesanan
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Check-in', 'Lunas', ?, ?, ?, NOW())";
+
+        $total_bayar = $_POST['total_bayar_final']; // Ambil dari hitungan harga tipe kamar x durasi
+        $status_pembayaran = 'Lunas'; // Karena tamu walk-in langsung bayar di tempat
+
+        $query = "INSERT INTO reservasi (kode_booking, total_bayar, status_pembayaran, tanggal_pemesanan, ...) 
+                VALUES (?, ?, ?, NOW(), ...)";
         
         $stmt = $conn->prepare($query_insert);
 

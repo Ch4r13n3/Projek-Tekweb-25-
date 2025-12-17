@@ -23,11 +23,19 @@ if (!$kode_booking || !$kontak) {
 } else {
     // 1. Ambil data reservasi dari database
     // Menggunakan JOIN untuk mendapatkan nama tipe kamar
-    $query = "SELECT r.*, tk.nama_tipe 
-              FROM reservasi r 
-              JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
-              WHERE r.kode_booking = ? 
-              AND (r.email_pemesan = ? OR r.telp_pemesan = ?)";
+    // $query = "SELECT r.*, tk.nama_tipe 
+    //           FROM reservasi r 
+    //           JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
+    //           WHERE r.kode_booking = ? 
+    //           AND (r.email_pemesan = ? OR r.telp_pemesan = ?);";
+
+    $query = "SELECT r.*, tk.nama_tipe, k.nomor_kamar, k.lantai 
+          FROM reservasi r 
+          JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
+          LEFT JOIN kamar k ON r.id_kamar_ditempati = k.id_kamar 
+          WHERE r.kode_booking = ? 
+          AND (r.email_pemesan = ? OR r.telp_pemesan = ?);";
+
     
     $stmt = $conn->prepare($query);
     
@@ -144,6 +152,7 @@ function get_status_class($status) {
                         <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
                             <li><strong>Tipe Kamar:</strong> <?php echo htmlspecialchars($reservasi['nama_tipe']); ?></li>
                             <li><strong>Jumlah Kamar Dipesan:</strong> <?php echo $reservasi['jumlah_tamu']; ?></li>
+                            <li><strong>Nomor Kamar: </strong><?php echo $reservasi['nomor_kamar']; ?></li>
                             <li><strong>Tanggal Check-in:</strong> <?php echo htmlspecialchars($reservasi['tanggal_checkin']); ?></li>
                             <li><strong>Tanggal Check-out:</strong> <?php echo htmlspecialchars($reservasi['tanggal_checkout']); ?></li>
                             <li><strong>Metode Pembayaran:</strong> <?php echo htmlspecialchars($reservasi['metode_pembayaran']); ?></li>

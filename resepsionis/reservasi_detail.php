@@ -53,7 +53,7 @@ function get_status_color($status) {
         'Check-in' => 'bg-green-100 text-green-700 border-green-200',
         'Completed' => 'bg-gray-100 text-gray-700 border-gray-200',
         'Batal' => 'bg-red-100 text-red-700 border-red-200',
-        'Batal' => 'bg-red-600 text-white',
+        // 'Batal' => 'bg-red-600 text-white',
         'Lunas' => 'bg-emerald-500 text-white',
         'Belum Bayar' => 'bg-rose-500 text-white'
     ];

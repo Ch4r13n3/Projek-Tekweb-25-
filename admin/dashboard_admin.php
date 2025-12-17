@@ -71,10 +71,6 @@ while($row = $result_denah->fetch_assoc()) {
     $denah_lantai[$lantai][] = $row;
 }
 
-// 5. Tutup koneksi database
-if (isset($conn)) {
-    $conn->close();
-}
 
 ?>
 
@@ -205,8 +201,111 @@ if (isset($conn)) {
                     <?php endforeach; ?>
                 <?php endif; ?>
             </section>
+            <section class="mt-8 bg-white p-8 rounded-xl shadow-md border border-gray-100">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Kalender Okupansi (30 Hari Kedepan)</h2>
+        <div class="text-sm text-gray-500 font-medium">Periode: <?php echo date('d M Y'); ?> s/d <?php echo date('d M Y', strtotime('+30 days')); ?></div>
+    </div>
+
+    <?php
+    // 1. Ambil daftar semua kamar
+    $res_kamar_kalender = $conn->query("SELECT id_kamar, nomor_kamar FROM kamar ORDER BY nomor_kamar ASC");
+    $daftar_kamar = [];
+    while($row = $res_kamar_kalender->fetch_assoc()) {
+        $daftar_kamar[] = $row;
+    }
+
+    // 2. Ambil data booking (Tambahkan r.id_reservasi ke SELECT)
+    $tgl_awal = date('Y-m-d');
+    $tgl_akhir = date('Y-m-d', strtotime('+30 days'));
+    
+    $sql_booking = "SELECT r.id_reservasi, r.id_kamar_ditempati as id_kamar, r.tanggal_checkin, r.tanggal_checkout, u.role, r.nama_pemesan 
+                    FROM reservasi r 
+                    JOIN users u ON r.id_user = u.id_user
+                    WHERE r.status_reservasi != 'Canceled' 
+                    AND r.id_kamar_ditempati IS NOT NULL
+                    AND r.tanggal_checkin <= ? AND r.tanggal_checkout >= ?";
+    
+    $stmt_book = $conn->prepare($sql_booking);
+    $stmt_book->bind_param("ss", $tgl_akhir, $tgl_awal);
+    $stmt_book->execute();
+    $res_book = $stmt_book->get_result();
+    
+    $data_booking = [];
+    while($b = $res_book->fetch_assoc()) {
+        $data_booking[] = $b;
+    }
+    ?>
+
+    <div class="overflow-x-auto border rounded-lg">
+        <table class="w-full border-collapse">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border p-2 text-xs w-24 sticky left-0 bg-gray-100 z-10">No. Kamar</th>
+                    <?php 
+                    for($i=0; $i<30; $i++): 
+                        $time = strtotime("+$i days");
+                        $day_label = date('D', $time);
+                        $date_label = date('d', $time);
+                        $is_weekend = ($day_label == 'Sun' || $day_label == 'Sat');
+                    ?>
+                        <th class="border p-1 text-[10px] min-w-[35px] <?php echo $is_weekend ? 'bg-red-50 text-red-500' : 'text-gray-600'; ?>">
+                            <?php echo $date_label; ?><br><?php echo $day_label; ?>
+                        </th>
+                    <?php endfor; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($daftar_kamar as $rk): ?>
+                <tr>
+                    <td class="border p-2 font-bold text-xs sticky left-0 bg-white shadow-sm"><?php echo $rk['nomor_kamar']; ?></td>
+                    <?php 
+                    for($i=0; $i<30; $i++): 
+                        $check_date = date('Y-m-d', strtotime("+$i days"));
+                        $cell_content = '<div class="bg-white h-8 w-full border-[0.5px] border-gray-50"></div>';
+                        
+                        foreach($data_booking as $db) {
+                            if ($db['id_kamar'] == $rk['id_kamar'] && 
+                                $check_date >= $db['tanggal_checkin'] && 
+                                $check_date < $db['tanggal_checkout']) {
+                                
+                                $color = ($db['role'] == 'customer') ? "bg-blue-500" : "bg-indigo-600";
+                                $info = $db['nama_pemesan'] . " (" . ucfirst($db['role']) . ")";
+                                
+                                // Membuat cell menjadi link yang bisa diklik
+                                // Ubah 'detail_reservasi.php' sesuai nama file detail Anda jika berbeda
+                                $cell_content = '
+                                <a href="detail_reservasi.php?id='.$db['id_reservasi'].'" 
+                                   class="block '.$color.' h-8 w-full transition-all hover:opacity-80 border-[0.5px] border-gray-50" 
+                                   title="'.$info.': '.$check_date.'">
+                                </a>';
+                                break;
+                            }
+                        }
+                    ?>
+                        <td class="border p-0">
+                            <?php echo $cell_content; ?>
+                        </td>
+                    <?php endfor; ?>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="flex flex-wrap gap-6 mt-6 text-xs font-semibold text-gray-600">
+        <div class="flex items-center"><span class="w-4 h-4 bg-blue-500 rounded mr-2"></span> Pesanan Online (Customer)</div>
+        <div class="flex items-center"><span class="w-4 h-4 bg-indigo-600 rounded mr-2"></span> Pesanan Walk-in (Admin/Resepsionis)</div>
+        <div class="flex items-center"><span class="w-4 h-4 border bg-white rounded mr-2 shadow-sm"></span> Kosong / Tersedia</div>
+        <div class="italic text-gray-400 ml-auto">* Klik pada kotak berwarna untuk melihat detail reservasi.</div>
+    </div>
+</section>
 
         </main>
     </div>
 </body>
 </html>
+<?php // 5. Tutup koneksi database
+if (isset($conn)) {
+    $conn->close();
+} ?>

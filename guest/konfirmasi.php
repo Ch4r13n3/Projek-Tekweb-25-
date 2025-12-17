@@ -82,11 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 4. INSERT Data ke Database
             $query_insert = "
-                INSERT INTO reservasi (id_user, kode_booking, nama_pemesan, ktp_pemesan, email_pemesan, 
-                                        telp_pemesan, id_tipe_kamar, jumlah_tamu, tanggal_checkin, 
-                                        tanggal_checkout, total_bayar, status_reservasi, metode_pembayaran, 
-                                        status_pembayaran) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                INSERT INTO reservasi (id_user, kode_booking, nama_pemesan, ktp_pemesan, email_pemesan, 
+                                        telp_pemesan, id_tipe_kamar, jumlah_tamu, tanggal_checkin, 
+                                        tanggal_checkout, total_bayar, status_reservasi, metode_pembayaran, 
+                                        status_pembayaran) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             $stmt_insert = $conn->prepare($query_insert);
             // Tipe bind: i=integer, s=string, d=double/float (untuk total_bayar)
@@ -128,9 +128,9 @@ if (!$kode_booking) {
 
 // Ambil data reservasi dari database
 $query = "SELECT r.*, tk.nama_tipe, tk.harga_per_malam 
-          FROM reservasi r 
-          JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
-          WHERE r.kode_booking = ?";
+          FROM reservasi r 
+          JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
+          WHERE r.kode_booking = ?";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("s", $kode_booking);
 $stmt->execute();

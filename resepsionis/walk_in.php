@@ -108,14 +108,19 @@ if (isset($_POST['submit_walkin'])) {
             nama_pemesan, 
             telp_pemesan, 
             email_pemesan,
-            tanggal_pemesan
+            tanggal_pemesanan
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Check-in', 'Lunas', ?, ?, ?, NOW())";
         
         $stmt = $conn->prepare($query_insert);
+
+        if (!$stmt) {
+            // Ini untuk menangkap pesan error SQL jika prepare gagal
+            throw new Exception("Prepare Error: " . $conn->error);
+        }
         
         // C. Bind Param: s (kode), i (user), i (tipe), i (kamar), i (durasi), s (in), s (out), i (tamu), d (bayar), s (nama), s (telp), s (email)
         // Format Tipe: siiiisidsss
-        $tipe_data = "siiiiisidsss"; 
+        $tipe_data = "siiiissidsss"; 
         
         $stmt->bind_param(
             $tipe_data, 
@@ -143,7 +148,7 @@ if (isset($_POST['submit_walkin'])) {
         $conn->commit();
         $_SESSION['msg'] = "Check-in Berhasil! Kode Booking: $kode";
         $_SESSION['alert_class'] = "success";
-        header("Location: reservasi_list.php"); 
+        header("Location: walk_in.php"); 
         exit;
 
     } catch (Exception $e) {

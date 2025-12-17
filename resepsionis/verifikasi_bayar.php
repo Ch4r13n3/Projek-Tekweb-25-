@@ -62,9 +62,13 @@ $result = $conn->query($sql_verif);
     <title>Verifikasi Pembayaran - Cloud Nine Inn</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
 </head>
 <body class="bg-gray-50 flex h-screen">
 
+    <?php include 'sidebar.php'; ?>
+<!-- 
     <nav class="w-64 bg-gray-900 text-white flex flex-col h-full shadow-xl">
         <div class="p-6"><h2 class="text-2xl font-bold text-sky-400">Resepsionis</h2></div>
         <ul class="flex-1 px-4 space-y-2">
@@ -74,7 +78,7 @@ $result = $conn->query($sql_verif);
             <li><a href="verifikasi_bayar.php" class="flex items-center p-3 bg-sky-600 rounded-lg font-bold"><i class="fas fa-check-circle mr-3"></i>Verifikasi</a></li>
             <li><a href="reservasi_list.php" class="flex items-center p-3 hover:bg-gray-800 rounded-lg"><i class="fas fa-list mr-3"></i>Data Reservasi</a></li>
         </ul>
-    </nav>
+    </nav> -->
 
     <main class="flex-1 p-8 overflow-auto">
         <h1 class="text-3xl font-bold text-gray-800 mb-6">✔️ Verifikasi Pembayaran</h1>
@@ -112,17 +116,17 @@ $result = $conn->query($sql_verif);
                         </div>
 
                         <div class="mt-6 flex gap-3">
-                            <form method="POST" class="inline">
+                            <form method="POST" class="inline" onsubmit="return confirm('Setujui pembayaran ini?')">
                                 <input type="hidden" name="kode_booking" value="<?= $r['kode_booking'] ?>">
                                 <input type="hidden" name="action" value="setujui">
                                 <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm">
                                     <i class="fas fa-check mr-1"></i> Setujui Pembayaran
                                 </button>
                             </form>
-                            <form method="POST" class="inline">
+                            <form method="POST" class="inline" onsubmit="return confirm('Tolak bukti pembayaran ini?')">
                                 <input type="hidden" name="kode_booking" value="<?= $r['kode_booking'] ?>">
                                 <input type="hidden" name="action" value="tolak">
-                                <button type="submit" onclick="return confirm('Tolak bukti ini?')" class="bg-white border border-red-500 text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm">
+                                <button type="submit" class="bg-white border border-red-500 text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm">
                                     Tolak
                                 </button>
                             </form>

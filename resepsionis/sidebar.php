@@ -41,7 +41,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </li>
 
         <li>
-            <a href="reservasi_list.php?status=menunggu_verifikasi" 
+            <!-- <a href="reservasi_list.php?status=menunggu_verifikasi"  -->
+            <a href="verifikasi_bayar.php"
                class="flex items-center p-3 rounded-lg transition-colors 
                <?= (isset($_GET['status']) && $_GET['status'] == 'menunggu_verifikasi') ? 'bg-sky-600 text-white shadow-lg' : 'hover:bg-gray-800 text-gray-400' ?>">
                 <i class="fas fa-money-check-alt mr-3 w-5"></i>Verifikasi Pembayaran 

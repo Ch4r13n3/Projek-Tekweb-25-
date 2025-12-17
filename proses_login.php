@@ -58,6 +58,12 @@ if ($result->num_rows === 1) {
     exit;
 }
 
-$stmt->close();
-$conn->close();
+if ($stmt) {
+    $stmt->close();
+} elseif ($conn) {
+    $conn->close();
+}
+
+// $stmt->close();
+// $conn->close();
 ?>

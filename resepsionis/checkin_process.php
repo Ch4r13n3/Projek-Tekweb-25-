@@ -4,7 +4,7 @@ session_start();
 require_once '../koneksi.php';
 
 // 1. Autentikasi Keamanan
-if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'resepsionis') {
+if (!isset($_SESSION['loggedin']) || $_SESSION['role'] !== 'resepsionis') {
     header("Location: ../login.php");
     exit;
 }

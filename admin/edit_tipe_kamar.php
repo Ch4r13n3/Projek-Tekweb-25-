@@ -14,40 +14,99 @@ if (!isset($_GET['id'])) {
     exit;
 }
 
-$id_tipe = $_GET['id'];
+$id_tipe = (int) $_GET['id']; // Pastikan ID di-cast ke integer
 
 // 3. PROSES UPDATE DATA
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $nama_tipe          = $_POST['nama_tipe'];
-    $harga_per_malam    = $_POST['harga_per_malam'];
-    $kapasitas          = $_POST['kapasitas'];
-    $luas_kamar         = $_POST['luas_kamar'];
-    $kategori_hunian    = $_POST['kategori_hunian'];
-    $tingkat_fasilitas  = $_POST['tingkat_fasilitas'];
-    $deskripsi          = $_POST['deskripsi'];
-    $add_on             = $_POST['add_on'];
+    
+    // --- KEAMANAN: Sanitasi Input POST ---
+    $nama_tipe          = htmlspecialchars(trim($_POST['nama_tipe']));
+    $harga_per_malam    = (int) $_POST['harga_per_malam']; // Cast ke integer
+    $kapasitas          = (int) $_POST['kapasitas'];
+    $luas_kamar         = htmlspecialchars(trim($_POST['luas_kamar']));
+    $kategori_hunian    = htmlspecialchars($_POST['kategori_hunian']);
+    $tingkat_fasilitas  = htmlspecialchars($_POST['tingkat_fasilitas']);
+    $deskripsi          = htmlspecialchars(trim($_POST['deskripsi']));
+    $add_on             = htmlspecialchars(trim($_POST['add_on']));
+    $old_foto           = $_POST['old_foto'];
 
-    // --- LOGIKA BARU: MENGGABUNGKAN CHECKBOX MENJADI STRING ---
-    // Ambil array dari checkbox, jika kosong set array kosong
+    // --- LOGIKA: MENGGABUNGKAN CHECKBOX MENJADI STRING ---
     $input_bed = $_POST['jenis_tempat_tidur'] ?? [];
-    // Gabungkan array menjadi string dipisah koma (Cth: "King Size, Single Bed")
     $jenis_tempat_tidur = implode(", ", $input_bed); 
     
-    // Logika Foto
+    // 🔥 PENAMBAHAN: Pengecekan Duplikat (Kecuali Data Milik Sendiri)
+    $cek_stmt = $conn->prepare("SELECT id_tipe_kamar FROM tipe_kamar WHERE nama_tipe = ? AND id_tipe_kamar != ?");
+    $cek_stmt->bind_param("si", $nama_tipe, $id_tipe);
+    $cek_stmt->execute();
+    $cek_result = $cek_stmt->get_result();
+
+    if ($cek_result->num_rows > 0) {
+        $cek_stmt->close();
+        $_SESSION['flash_message'] = [
+            'type' => 'error', 
+            'text' => "Gagal! Nama Tipe Kamar **$nama_tipe** sudah ada. Silakan gunakan nama lain."
+        ];
+        header("Location: edit_tipe_kamar.php?id=$id_tipe"); // Kembali ke halaman edit
+        exit;
+    }
+    $cek_stmt->close();
+
+
+    $nama_foto = $old_foto; // Default: Gunakan nama foto lama
+
+    // Logika Foto Baru
     if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
-        // JIKA GANTI FOTO
         $target_dir = "../uploads/";
-        $ext = pathinfo($_FILES["foto"]["name"], PATHINFO_EXTENSION);
-        $nama_foto = "tipe_kamar_" . time() . "." . $ext;
-        move_uploaded_file($_FILES["foto"]["tmp_name"], $target_dir . $nama_foto);
+        $file_name = $_FILES["foto"]["name"];
+        $ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
-        // Hapus foto lama fisik jika perlu (Code optional)
-        // ...
+        // --- KEAMANAN TAMBAHAN: Validasi Ukuran File (Max 5MB) ---
+        $max_size = 5 * 1024 * 1024; // 5 MB
+        if ($_FILES['foto']['size'] > $max_size) {
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal: Ukuran file foto maksimal 5MB."
+            ];
+            header("Location: edit_tipe_kamar.php?id=$id_tipe");
+            exit;
+        }
+        
+        // --- KEAMANAN: Validasi Ekstensi File ---
+        $allowed_ext = ['jpg', 'jpeg', 'png', 'webp'];
+        if (!in_array($ext, $allowed_ext)) {
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal: Hanya file JPG, JPEG, PNG, atau WEBP yang diizinkan."
+            ];
+            header("Location: edit_tipe_kamar.php?id=$id_tipe");
+            exit;
+        }
 
+        // --- KEAMANAN: Penamaan File Unik ---
+        $nama_foto = "tipe_kamar_" . time() . "_" . uniqid() . "." . $ext;
+        
+        // Coba upload file baru
+        if (move_uploaded_file($_FILES["foto"]["tmp_name"], $target_dir . $nama_foto)) {
+            
+            // --- LOGIKA PENGHAPUSAN FOTO LAMA FISIK ---
+            if ($old_foto && $old_foto != 'default.jpg' && file_exists($target_dir . $old_foto)) {
+                unlink($target_dir . $old_foto);
+            }
+
+        } else {
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal mengunggah file foto baru."
+            ];
+            header("Location: edit_tipe_kamar.php?id=$id_tipe");
+            exit;
+        }
+
+        // Jika ganti foto, gunakan query UPDATE yang mencakup kolom 'foto'
         $query = "UPDATE tipe_kamar SET 
-                    nama_tipe=?, harga_per_malam=?, kapasitas=?, luas_kamar=?, foto=?, 
-                    deskripsi=?, add_on=?, kategori_hunian=?, tingkat_fasilitas=?, jenis_tempat_tidur=? 
-                  WHERE id_tipe_kamar=?";
+                      nama_tipe=?, harga_per_malam=?, kapasitas=?, luas_kamar=?, foto=?, 
+                      deskripsi=?, add_on=?, kategori_hunian=?, tingkat_fasilitas=?, jenis_tempat_tidur=? 
+                    WHERE id_tipe_kamar=?";
         
         $stmt = $conn->prepare($query);
         $stmt->bind_param("siisssssssi", 
@@ -56,11 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         );
 
     } else {
-        // JIKA TIDAK GANTI FOTO
+        // JIKA TIDAK GANTI FOTO, gunakan query UPDATE tanpa kolom 'foto'
         $query = "UPDATE tipe_kamar SET 
-                    nama_tipe=?, harga_per_malam=?, kapasitas=?, luas_kamar=?, 
-                    deskripsi=?, add_on=?, kategori_hunian=?, tingkat_fasilitas=?, jenis_tempat_tidur=? 
-                  WHERE id_tipe_kamar=?";
+                      nama_tipe=?, harga_per_malam=?, kapasitas=?, luas_kamar=?, 
+                      deskripsi=?, add_on=?, kategori_hunian=?, tingkat_fasilitas=?, jenis_tempat_tidur=? 
+                    WHERE id_tipe_kamar=?";
         
         $stmt = $conn->prepare($query);
         $stmt->bind_param("siissssssi", 
@@ -70,14 +129,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if ($stmt->execute()) {
-        echo "<script>alert('Data berhasil diperbarui!'); window.location='daftar_kelola_tipekamar.php';</script>";
+        $_SESSION['flash_message'] = [
+            'type' => 'success', 
+            'text' => "Tipe Kamar **$nama_tipe** berhasil diperbarui."
+        ];
+        $stmt->close(); // Tutup statement sebelum redirect
+        header("Location: daftar_kelola_tipekamar.php");
+        exit;
     } else {
-        echo "Error: " . $stmt->error;
+        error_log("Error update tipe kamar: " . $stmt->error);
+        $_SESSION['flash_message'] = [
+            'type' => 'error', 
+            'text' => "Gagal memperbarui data. Error: " . $stmt->error
+        ];
+        $stmt->close(); // Tutup statement sebelum redirect
+        header("Location: edit_tipe_kamar.php?id=$id_tipe"); // Kembali ke halaman edit
+        exit;
     }
-    exit;
 }
 
 // 4. AMBIL DATA LAMA
+// (Logika ini tetap di luar blok POST agar data lama ditampilkan saat pertama kali diakses atau saat error redirect dari POST)
 $stmt = $conn->prepare("SELECT * FROM tipe_kamar WHERE id_tipe_kamar = ?");
 $stmt->bind_param("i", $id_tipe);
 $stmt->execute();
@@ -88,9 +160,9 @@ if (!$data) {
     echo "Data tipe kamar tidak ditemukan.";
     exit;
 }
+$stmt->close(); // Tutup statement SELECT
 
 // --- PERSIAPAN DATA CHECKBOX ---
-// Pecah string dari database menjadi array agar bisa dicek satu-satu
 $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
 ?>
 
@@ -135,7 +207,7 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
                         </div>
                         <div>
                             <label class="block text-gray-700 font-bold mb-2">Harga per Malam</label>
-                            <input type="number" name="harga_per_malam" class="w-full border rounded p-2" value="<?php echo htmlspecialchars($data['harga_per_malam']); ?>" required>
+                            <input type="number" name="harga_per_malam" min="0" class="w-full border rounded p-2" value="<?php echo htmlspecialchars($data['harga_per_malam']); ?>" required>
                         </div>
                     </div>
 
@@ -145,7 +217,6 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
                             <select id="kategori_hunian" name="kategori_hunian" class="w-full border rounded p-2 bg-white" onchange="updateSpesifikasi()">
                                 <option value="Single" <?php echo ($data['kategori_hunian'] == 'Single') ? 'selected' : ''; ?>>Single Room (1 tamu)</option>
                                 <option value="Double" <?php echo ($data['kategori_hunian'] == 'Double') ? 'selected' : ''; ?>>Double Room (2 tamu)</option>
-                                <option value="Connecting Room" <?php echo ($data['kategori_hunian'] == 'Connecting Room') ? 'selected' : ''; ?>>Connecting Room</option>
                                 <option value="Family" <?php echo ($data['kategori_hunian'] == 'Family') ? 'selected' : ''; ?>>Family Room</option>
                             </select>
                         </div>
@@ -163,63 +234,28 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
                         <label class="block text-gray-700 font-bold mb-2">Jenis Tempat Tidur (Boleh pilih lebih dari 1)</label>
                         <div class="bg-white border rounded p-3 grid grid-cols-2 gap-2">
                             
+                            <?php 
+                            $bed_options = ["Single Bed", "Double Bed", "Queen Size Bed", "King Size Bed", "Twin Bed", "Bunk Bed", "Extra Bed"];
+                            foreach ($bed_options as $bed): 
+                            ?>
                             <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Single Bed" 
+                                <input type="checkbox" name="jenis_tempat_tidur[]" value="<?php echo $bed; ?>" 
                                 class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Single Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Single Bed</span>
+                                <?php echo in_array($bed, $bed_dimiliki) ? 'checked' : ''; ?>>
+                                <span><?php echo $bed; ?></span>
                             </label>
+                            <?php endforeach; ?>
 
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Double Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Double Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Double Bed</span>
-                            </label>
-
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Queen Size Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Queen Size Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Queen Size</span>
-                            </label>
-
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="King Size Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("King Size Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>King Size</span>
-                            </label>
-
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Twin Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Twin Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Twin Bed</span>
-                            </label>
-
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Bunk Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Bunk Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Bunk Bed</span>
-                            </label>
-
-                             <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" name="jenis_tempat_tidur[]" value="Extra Bed" 
-                                class="form-checkbox h-4 w-4 text-blue-600"
-                                <?php echo in_array("Extra Bed", $bed_dimiliki) ? 'checked' : ''; ?>>
-                                <span>Extra Bed Available</span>
-                            </label>
                         </div>
                     </div>
 
                     <div class="mb-4">
                         <label class="block text-gray-700 font-bold mb-2">Tingkat Fasilitas</label>
-                        <select id="tingkat_fasilitas" name="tingkat_fasilitas" class="w-full border rounded p-2 bg-white" onchange="updateDeskripsi()">
+                        <select id="tingkat_fasilitas" name="tingkat_fasilitas" class="w-full border rounded p-2 bg-white" onchange="updateDeskripsi(true)">
                             <option value="Standard" <?php echo ($data['tingkat_fasilitas'] == 'Standard') ? 'selected' : ''; ?>>Standard</option>
                             <option value="Superior" <?php echo ($data['tingkat_fasilitas'] == 'Superior') ? 'selected' : ''; ?>>Superior</option>
                             <option value="Deluxe" <?php echo ($data['tingkat_fasilitas'] == 'Deluxe') ? 'selected' : ''; ?>>Deluxe</option>
+                            <option value="Executive Suite" <?php echo ($data['tingkat_fasilitas'] == 'Executive Suite') ? 'selected' : ''; ?>>Executive Suite</option>
                             <option value="Family Room" <?php echo ($data['tingkat_fasilitas'] == 'Family Room') ? 'selected' : ''; ?>>Family Room</option>
                             <option value="Smoking Room" <?php echo ($data['tingkat_fasilitas'] == 'Smoking Room') ? 'selected' : ''; ?>>Smoking Room</option>
                         </select>
@@ -237,7 +273,7 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
                     <div class="mb-6">
                         <label class="block text-gray-700 font-bold mb-2">Foto (Biarkan kosong jika tidak ingin mengubah)</label>
                         <div class="flex items-center gap-4">
-                            <img src="../uploads/<?php echo htmlspecialchars($data['foto']); ?>" class="h-20 w-20 object-cover rounded border">
+                            <img src="../uploads/<?php echo htmlspecialchars($data['foto']); ?>" class="h-20 w-20 object-cover rounded border" alt="Foto Lama">
                             <input type="file" name="foto" class="w-full">
                         </div>
                     </div>
@@ -249,7 +285,7 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
     </div>
 
     <script>
-    // FUNGSI 1: Mengatur Kapasitas & Luas (Otomatisasi Connecting Room)
+    // FUNGSI 1: Mengatur Kapasitas & Luas (Otomatisasi)
     function updateSpesifikasi() {
         let kategori = document.getElementById("kategori_hunian").value;
         let inputKapasitas = document.getElementById("kapasitas");
@@ -265,12 +301,8 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
             kapasitas = 2;
             luas = "32 m²";
         } else if (kategori === "Family") {
-            kapasitas = 3; 
+            kapasitas = 4; 
             luas = "45 m²";
-        } else if (kategori === "Connecting Room") {
-            // LOGIKA CONNECTING ROOM: Kapasitas & Luas dikali 2
-            kapasitas = 4;
-            luas = "64 m² (2 x 32 m²)";
         }
 
         inputKapasitas.value = kapasitas;
@@ -278,12 +310,16 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
     }
 
     // FUNGSI 2: Mengatur Deskripsi Fasilitas Otomatis
-    function updateDeskripsi() {
+    function updateDeskripsi(forceUpdate = true) {
         let fasilitas = document.getElementById("tingkat_fasilitas").value;
-        let kategoriHunian = document.getElementById("kategori_hunian").value; 
         let deskripsiBox = document.getElementById("deskripsi");
         let teks = "";
 
+        // JIKA TIDAK DIPAKSA UPDATE DAN TEXTAREA SUDAH ADA ISI (dari DB), JANGAN DITIMPA
+        if (!forceUpdate && deskripsiBox.value.trim() !== "") {
+            return; 
+        }
+        
         switch(fasilitas){
             case "Standard":
                 teks = "Fasilitas Dasar: AC, TV Kabel 32 inch, Wi-Fi gratis, Kamar mandi shower (Hot/Cold), Air mineral botol, dan Perlengkapan mandi dasar.";
@@ -294,6 +330,9 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
             case "Deluxe":
                 teks = "Ukuran lebih luas dengan Balkon pribadi. Fasilitas mencakup: Bathtub, Kulkas mini (Minibar), Hairdryer, TV 40 inch, dan Brankas pribadi.";
                 break;
+            case "Executive Suite":
+                 teks = "Tingkat premium: Ruang tamu terpisah, tempat tidur King Size, meja makan, dan akses lounge eksklusif. Menyediakan fasilitas Deluxe PLUS bathrobe dan sepatu kamar premium.";
+                 break;
             case "Family Room":
                 teks = "Kamar Keluarga: Ruangan sangat luas dengan area duduk (Sofa). Dilengkapi fasilitas hiburan Smart TV 50 inch, Microwave, dan Meja makan kecil.";
                 break;
@@ -303,14 +342,15 @@ $bed_dimiliki = explode(", ", $data['jenis_tempat_tidur']);
             default: 
                 teks = ""; 
         }
-
-        // TAMBAHAN KHUSUS: Jika Connecting Room
-        if (kategoriHunian === "Connecting Room") {
-            teks += "\n\nCATATAN CONNECTING: Unit ini terdiri dari 2 kamar terpisah yang memiliki pintu penghubung di tengah (Connecting Door). Anda akan mendapatkan 2 kamar mandi dan privasi ganda.";
-        }
         
         deskripsiBox.value = teks; 
     }
+
+    // Panggil kedua fungsi saat dokumen dimuat.
+    document.addEventListener('DOMContentLoaded', () => {
+        updateSpesifikasi(); 
+        updateDeskripsi(false);
+    });
     </script>
 </body>
 </html>

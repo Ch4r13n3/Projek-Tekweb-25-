@@ -2,11 +2,32 @@
 session_start();
 require '../koneksi.php';
 
-// 1. Penjaga (Guard)
+// =================================================================
+// 0. Penjaga (Guard) & Helper
+// =================================================================
+
+// Penjaga Akses
 if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
     header("Location: ../login.php");
     exit;
 }
+
+/**
+ * Helper untuk menentukan class Tailwind CSS berdasarkan status kamar.
+ * Digunakan untuk merapikan tampilan status di tabel.
+ */
+function getStatusClass($status) {
+    $map = [
+        'tersedia' => 'bg-green-100 text-green-800 border-green-200 border',
+        'terisi' => 'bg-red-100 text-red-800 border-red-200 border',
+        'kotor' => 'bg-yellow-200 text-yellow-900 border-yellow-400 border',
+        'perbaikan' => 'bg-gray-200 text-gray-800 border-gray-400 border'
+    ];
+    $st = strtolower(trim($status));
+    // Mengembalikan class yang sesuai, atau default jika status tidak dikenali
+    return $map[$st] ?? 'bg-blue-100 text-blue-800'; 
+}
+
 
 // =================================================================
 // LOGIKA DATABASE (CRUD: CREATE, UPDATE, DELETE)
@@ -15,58 +36,142 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
 $action = $_POST['aksi'] ?? $_GET['aksi'] ?? null;
 
 if ($action) {
-    // --- 1. LOGIKA TAMBAH DATA ---
-    if ($action == 'tambah') {
-        $nomor   = $_POST['nomor_kamar'];
-        $lantai  = $_POST['lantai'];
-        $id_tipe = $_POST['id_tipe_kamar'];
-        $status  = $_POST['status'];
+    // Sanitasi input dasar
+    $nomor = htmlspecialchars(trim($_POST['nomor_kamar'] ?? ''));
+    // Casting ke integer. Jika kosong/null, akan menjadi 0.
+    $lantai = (int) ($_POST['lantai'] ?? 0); 
+    $id_tipe = (int) ($_POST['id_tipe_kamar'] ?? 0);
+    $status = htmlspecialchars($_POST['status'] ?? '');
 
-        // Cek Duplikat
-        $cek = $conn->query("SELECT nomor_kamar FROM kamar WHERE nomor_kamar = '$nomor'");
-        if ($cek->num_rows > 0) {
-            echo "<script>alert('Gagal! Nomor Kamar $nomor sudah ada.'); window.location='daftar_kelola_kamar.php';</script>";
+    // --- 1. LOGIKA TAMBAH DATA ---
+    if($action == 'tambah'){
+        if ($lantai <= 0 || $id_tipe <= 0) {
+            $conn->close();
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal! Lantai dan Tipe Kamar harus dipilih/valid."
+            ];
+            header("Location: daftar_kelola_kamar.php");
             exit;
         }
 
+        // Cek duplikat
+        $cek_stmt = $conn->prepare("SELECT nomor_kamar FROM kamar WHERE nomor_kamar = ?");
+        $cek_stmt->bind_param("s", $nomor);
+        $cek_stmt->execute();
+        $cek_result = $cek_stmt->get_result();
+        
+        if ($cek_result->num_rows > 0) {
+            $cek_stmt->close();
+            // PERBAIKAN: Tutup koneksi di sini sebelum exit
+            $conn->close(); 
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal! Nomor Kamar **$nomor** sudah ada. Silakan gunakan nomor lain."
+            ];
+            header("Location: daftar_kelola_kamar.php");
+            exit;
+        }
+        $cek_stmt->close();
+
+        // 1b. Eksekusi tambah
         $stmt = $conn->prepare("INSERT INTO kamar (nomor_kamar, lantai, id_tipe_kamar, status) VALUES (?, ?, ?, ?)");
         $stmt->bind_param("siis", $nomor, $lantai, $id_tipe, $status);
         $stmt->execute();
         $stmt->close();
         
+        // Flash Message Sukses
+        $_SESSION['flash_message'] = [
+            'type' => 'success', 
+            'text' => "Unit Kamar **$nomor** berhasil ditambahkan."
+        ];
+
+        // PERBAIKAN: Tutup koneksi di sini
+        $conn->close(); 
         header("Location: daftar_kelola_kamar.php");
         exit;
 
     // --- 2. LOGIKA UPDATE DATA (EDIT) ---
     } elseif ($action == 'edit') {
-        $id_kamar = $_POST['id_kamar'];
-        $nomor    = $_POST['nomor_kamar'];
-        $lantai   = $_POST['lantai'];
-        $id_tipe  = $_POST['id_tipe_kamar'];
-        $status   = $_POST['status'];
+        $id_kamar = (int) $_POST['id_kamar'];
 
-        // Cek Duplikat (Kecuali punya sendiri)
-        $cek = $conn->query("SELECT nomor_kamar FROM kamar WHERE nomor_kamar = '$nomor' AND id_kamar != '$id_kamar'");
-        if ($cek->num_rows > 0) {
-            echo "<script>alert('Gagal! Nomor sudah dipakai kamar lain.'); window.location='daftar_kelola_kamar.php';</script>";
+        // 2a. Cek Duplikat (Kecuali punya sendiri)
+        $cek_stmt = $conn->prepare("SELECT nomor_kamar FROM kamar WHERE nomor_kamar = ? AND id_kamar != ?");
+        $cek_stmt->bind_param("si", $nomor, $id_kamar);
+        $cek_stmt->execute();
+        $cek_result = $cek_stmt->get_result();
+        
+        if ($cek_result->num_rows > 0) {
+            $cek_stmt->close();
+            // PERBAIKAN: Tutup koneksi di sini sebelum exit
+            $conn->close(); 
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal! Nomor Kamar **$nomor** sudah dipakai kamar lain."
+            ];
+            header("Location: daftar_kelola_kamar.php");
             exit;
         }
+        $cek_stmt->close();
 
+        // 2b. Eksekusi update
         $stmt = $conn->prepare("UPDATE kamar SET nomor_kamar=?, lantai=?, id_tipe_kamar=?, status=? WHERE id_kamar=?");
         $stmt->bind_param("siisi", $nomor, $lantai, $id_tipe, $status, $id_kamar);
-        
+
         if($stmt->execute()) {
-            echo "<script>alert('Data berhasil diperbarui!'); window.location='daftar_kelola_kamar.php';</script>";
+            $_SESSION['flash_message'] = [
+                'type' => 'success', 
+                'text' => "Data Kamar **$nomor** berhasil diperbarui."
+            ];
         } else {
-            echo "<script>alert('Gagal update!');</script>";
+            error_log("Error update kamar: " . $stmt->error);
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal update data kamar. Silakan cek log server."
+            ];
         }
         $stmt->close();
+        
+        // PERBAIKAN: Tutup koneksi di sini
+        $conn->close(); 
+        header("Location: daftar_kelola_kamar.php");
         exit;
 
     // --- 3. LOGIKA HAPUS DATA ---
     } elseif ($action == 'hapus') {
-        $id_kamar = $_GET['id'];
-        $conn->query("DELETE FROM kamar WHERE id_kamar = $id_kamar");
+        $id_kamar = (int) $_GET['id'];
+        $nomor_kamar_hapus = '???'; // Default
+
+        // 3a. Ambil nomor kamar sebelum dihapus (untuk pesan notifikasi)
+        $stmt_fetch = $conn->prepare("SELECT nomor_kamar FROM kamar WHERE id_kamar = ?");
+        $stmt_fetch->bind_param("i", $id_kamar);
+        $stmt_fetch->execute();
+        $result_fetch = $stmt_fetch->get_result();
+        $kamar_data = $result_fetch->fetch_assoc();
+        $nomor_kamar_hapus = $kamar_data['nomor_kamar'] ?? '???';
+        $stmt_fetch->close();
+
+        // 3b. Eksekusi Hapus
+        $stmt = $conn->prepare("DELETE FROM kamar WHERE id_kamar = ?");
+        $stmt->bind_param("i", $id_kamar);
+        
+        if ($stmt->execute()) {
+            $_SESSION['flash_message'] = [
+                'type' => 'success', 
+                'text' => "Kamar **$nomor_kamar_hapus** berhasil dihapus."
+            ];
+        } else {
+            error_log("Error delete kamar: " . $stmt->error);
+            // GAGAL HAPUS (Mungkin karena FK Constraint)
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal menghapus kamar **$nomor_kamar_hapus**. Mungkin sedang terkait dengan data transaksi/reservasi."
+            ];
+        }
+        $stmt->close();
+
+        // PERBAIKAN: Tutup koneksi di sini
+        $conn->close(); 
         header("Location: daftar_kelola_kamar.php");
         exit;
     }
@@ -76,11 +181,14 @@ if ($action) {
 // AMBIL DATA UNTUK TAMPILAN
 // =================================================================
 
-// 1. Ambil List Tipe Kamar (Simpan di Array agar bisa dipakai di form Tambah & Edit)
+// 1. Ambil List Tipe Kamar
 $tipe_result = $conn->query("SELECT id_tipe_kamar, nama_tipe FROM tipe_kamar ORDER BY nama_tipe ASC");
 $tipe_list = [];
 while($row = $tipe_result->fetch_assoc()) {
     $tipe_list[] = $row;
+}
+if (isset($tipe_result)) {
+    $tipe_result->free();
 }
 
 // 2. Ambil Data Kamar untuk Tabel
@@ -89,6 +197,8 @@ $query_kamar = "SELECT kamar.*, tipe_kamar.nama_tipe
                 LEFT JOIN tipe_kamar ON kamar.id_tipe_kamar = tipe_kamar.id_tipe_kamar
                 ORDER BY kamar.lantai ASC, kamar.nomor_kamar ASC";
 $result_kamar = $conn->query($query_kamar);
+
+// Tidak perlu $conn->close() di sini karena halaman akan selesai setelah rendering HTML
 ?>
 
 <!DOCTYPE html>
@@ -120,6 +230,30 @@ $result_kamar = $conn->query($query_kamar);
         </nav>
 
         <main class="flex-1 p-6 md:p-8 overflow-y-auto relative">
+            <?php
+            // TAMPILKAN FLASH MESSAGE JIKA ADA
+            if (isset($_SESSION['flash_message'])): 
+                $flash = $_SESSION['flash_message'];
+                $type = $flash['type'];
+                $text = $flash['text'];
+                
+                // Tentukan class Tailwind berdasarkan tipe pesan
+                $bgColor = ($type == 'success') ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+                $icon = ($type == 'success') ? '✅' : '❌';
+            ?>
+                <div class="<?= $bgColor ?> border-l-4 p-4 rounded-lg mb-6 flex justify-between items-center transition duration-300 shadow-md" role="alert">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3"><?= $icon ?></span>
+                        <p class="font-medium"><?= $text ?></p>
+                    </div>
+                    <button onclick="this.parentElement.style.display='none';" class="text-xl font-bold ml-4 opacity-75 hover:opacity-100 transition leading-none">&times;</button>
+                </div>
+
+            <?php 
+                // HAPUS PESAN DARI SESI SETELAH DITAMPILKAN
+                unset($_SESSION['flash_message']);
+            endif; 
+            ?>
             <div class="flex justify-between items-end mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900">Kelola Unit Kamar</h1>
@@ -204,14 +338,7 @@ $result_kamar = $conn->query($query_kamar);
                                     <td class="py-4 px-6 text-gray-600"><?php echo htmlspecialchars($row['nama_tipe']); ?></td>
                                     
                                     <td class="py-4 px-6 text-center">
-                                        <?php 
-                                            $st = strtolower(trim($row['status']));
-                                            $cls = "bg-blue-100 text-blue-800";
-                                            if($st=='tersedia') $cls="bg-green-100 text-green-800 border-green-200 border";
-                                            elseif($st=='terisi') $cls="bg-red-100 text-red-800 border-red-200 border";
-                                            elseif($st=='kotor') $cls="bg-yellow-200 text-yellow-900 border-yellow-400 border";
-                                            elseif($st=='perbaikan') $cls="bg-gray-200 text-gray-800 border-gray-400 border";
-                                        ?>
+                                        <?php $cls = getStatusClass($row['status']); ?>
                                         <span class="<?= $cls ?> px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide"><?= $row['status'] ?></span>
                                     </td>
 
@@ -220,8 +347,7 @@ $result_kamar = $conn->query($query_kamar);
                                             
                                             <button onclick="bukaModalEdit(
                                                 '<?= $row['id_kamar'] ?>',
-                                                '<?= $row['nomor_kamar'] ?>',
-                                                '<?= $row['lantai'] ?>',
+                                                '<?= htmlspecialchars($row['nomor_kamar'], ENT_QUOTES) ?>', '<?= $row['lantai'] ?>',
                                                 '<?= $row['id_tipe_kamar'] ?>',
                                                 '<?= $row['status'] ?>'
                                             )" 
@@ -230,14 +356,14 @@ $result_kamar = $conn->query($query_kamar);
                                             </button>
                                             
                                             <a href="daftar_kelola_kamar.php?aksi=hapus&id=<?= $row['id_kamar'] ?>" 
-                                               class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow-sm transition"
-                                               onclick="return confirm('Hapus kamar <?= $row['nomor_kamar'] ?>?');" title="Hapus">🗑️</a>
+                                                class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow-sm transition"
+                                                onclick="return confirm('Hapus kamar <?= htmlspecialchars($row['nomor_kamar']) ?>? Tindakan ini tidak dapat dibatalkan.');" title="Hapus">🗑️</a>
                                         </div>
                                     </td>
                                 </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
-                                <tr><td colspan="6" class="text-center py-8 text-gray-500">Belum ada data.</td></tr>
+                                <tr><td colspan="6" class="text-center py-8 text-gray-500">Belum ada data unit kamar yang terdaftar.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -310,8 +436,14 @@ $result_kamar = $conn->query($query_kamar);
             // 1. Masukkan data ke dalam input di modal
             document.getElementById('edit_id_kamar').value = id;
             document.getElementById('edit_nomor').value = nomor;
+            
+            // Set nilai dropdown Lantai
             document.getElementById('edit_lantai').value = lantai;
+            
+            // Set nilai dropdown Tipe Kamar
             document.getElementById('edit_tipe').value = tipe;
+            
+            // Set nilai dropdown Status
             document.getElementById('edit_status').value = status;
 
             // 2. Tampilkan Modal (Hapus class 'hidden')

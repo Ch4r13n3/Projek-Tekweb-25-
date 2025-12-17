@@ -1,3 +1,4 @@
+<!-- daftar_kelola_dataCustomer.php -->
 <?php
 session_start(); // Wajib ada di setiap halaman yang butuh sesi
 require '../koneksi.php';
@@ -12,7 +13,7 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
 // Ambil semua data customer dari DB (READ)
 // Menggunakan kolom yang ada di screenshot Anda (username, no_ktp, no_telp)
 // Kolom 'created_at' dihapus karena tidak ada di tabel 'users' Anda
-$query = "SELECT id_user, nama_lengkap, username, no_ktp, email, no_telp
+$query = "SELECT id_user, nama_lengkap, username, no_ktp, email, no_telp, status 
           FROM users 
           WHERE role = 'customer' 
           ORDER BY nama_lengkap ASC";
@@ -53,38 +54,84 @@ $result = $stmt->get_result();
             </div>
         </nav>
         
-        <main class="flex-1 p-10 overflow-auto">
-            <h1 class="text-3xl font-bold mb-6">Kelola Data Customer</h1>
+        <main class="flex-1 p-6 md:p-8 overflow-y-auto">
+            <div class="flex justify-between items-end mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Kelola Data Customer</h1>
+                    <p class="text-gray-500 mt-1">Daftar lengkap pengguna yang terdaftar sebagai customer.</p>
+                </div>
+                </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <table class="min-w-full bg-white">
-                    <thead class="bg-gray-200">
-                        <tr>
-                            <th class="py-2 px-4 text-left">ID User</th>
-                            <th class="py-2 px-4 text-left">Nama</th>
-                            <th class="py-2 px-4 text-left">Username</th> <th class="py-2 px-4 text-left">NIK</th>
-                            <th class="py-2 px-4 text-left">Email</th>
-                            <th class="py-2 px-4 text-left">No. Telepon</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y text-gray-700">
-                        <?php if ($result->num_rows > 0): ?>
-                            <?php while ($row = $result->fetch_assoc()): ?>
-                                <tr class="border-b">
-                                    <td class="py-3 px-4"><?php echo $row['id_user']; ?></td>
-                                    <td class="py-3 px-4"><?php echo htmlspecialchars($row['nama_lengkap']); ?></td>
-                                    <td class="py-3 px-4"><?php echo htmlspecialchars($row['username']); ?></td> <td class="py-3 px-4"><?php echo htmlspecialchars($row['no_ktp']); ?></td>
-                                    <td class="py-3 px-4"><?php echo htmlspecialchars($row['email']); ?></td>
-                                    <td class="py-3 px-4"><?php echo htmlspecialchars($row['no_telp']); ?></td>
-                                </tr>
-                            <?php endwhile; ?>
-                        <?php else: ?>
+            <?php if (isset($_SESSION['success_message'])): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <span class="block sm:inline"><?php echo $_SESSION['success_message']; unset($_SESSION['success_message']); ?></span>
+            </div>
+            <?php endif; ?>
+            <?php if (isset($_SESSION['error_message'])): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <span class="block sm:inline"><?php echo $_SESSION['error_message']; unset($_SESSION['error_message']); ?></span>
+            </div>
+            <?php endif; ?>
+
+            <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left">
+                        <thead class="bg-gray-800 text-white uppercase tracking-wider">
                             <tr>
-                                <td colspan="6" class="py-4 px-4 text-center text-gray-500">Belum ada data customer yang terdaftar.</td>
+                                <th class="py-3 px-6">ID User</th>
+                                <th class="py-3 px-6">Nama Lengkap</th>
+                                <th class="py-3 px-6">Username</th> 
+                                <th class="py-3 px-6">NIK/No. KTP</th>
+                                <th class="py-3 px-6">Email</th>
+                                <th class="py-3 px-6">No. Telepon</th>
+                                <th class="py-3 px-6 text-center">Status</th> <th class="py-3 px-6 text-center">Aksi</th>
                             </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table> 
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            <?php if ($result->num_rows > 0): ?>
+                                <?php while ($row = $result->fetch_assoc()): ?>
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="py-3 px-6 text-xs text-gray-500"><?php echo $row['id_user']; ?></td>
+                                        <td class="py-3 px-6 font-medium text-gray-900"><?php echo htmlspecialchars($row['nama_lengkap']); ?></td>
+                                        <td class="py-3 px-6 text-gray-700"><?php echo htmlspecialchars($row['username']); ?></td> 
+                                        <td class="py-3 px-6 text-gray-700"><?php echo htmlspecialchars($row['no_ktp']); ?></td>
+                                        <td class="py-3 px-6 text-blue-600 hover:underline"><?php echo htmlspecialchars($row['email']); ?></td>
+                                        <td class="py-3 px-6 text-gray-700"><?php echo htmlspecialchars($row['no_telp']); ?></td>
+                                        <td class="py-3 px-6 text-center">
+                                            <?php 
+                                            $status_class = ($row['status'] == 'active') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                                            $status_text = ($row['status'] == 'active') ? 'Aktif' : 'Nonaktif';
+                                            ?>
+                                            <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full <?php echo $status_class; ?>">
+                                                <?php echo $status_text; ?>
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-6 text-center">
+                                            <?php if ($row['status'] == 'active'): ?>
+                                                <a href="deaktivasi_customer.php?id=<?php echo $row['id_user']; ?>&current_status=active" 
+                                                   onclick="return confirm('Anda yakin ingin menonaktifkan akun <?php echo htmlspecialchars($row['nama_lengkap']); ?>?')"
+                                                   class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-sm transition duration-150">
+                                                   Nonaktifkan
+                                                </a>
+                                            <?php else: ?>
+                                                <a href="deaktivasi_customer.php?id=<?php echo $row['id_user']; ?>&current_status=inactive" 
+                                                   onclick="return confirm('Anda yakin ingin mengaktifkan kembali akun <?php echo htmlspecialchars($row['nama_lengkap']); ?>?')"
+                                                   class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-sm transition duration-150">
+                                                   Aktifkan
+                                                </a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-gray-500">
+                                        </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table> 
+                </div>
             </div>
         </main>
     

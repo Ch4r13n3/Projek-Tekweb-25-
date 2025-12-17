@@ -13,12 +13,16 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
     } elseif ($_SESSION['role'] == 'resepsionis') {
         header("Location: resepsionis/dashboard_resepsionis.php");
     } else {
-        header("Location: user/dashboard_user.php");
+        header("Location: guest/index.php");
     }
     exit; // Pastikan script berhenti setelah redirect
 }
+// Ambil pesan error
+$error_message = $_SESSION['login_error'] ?? null;
+if (isset($_SESSION['login_error'])) {
+    unset($_SESSION['login_error']);
+}
 
-// 2. BARULAH BLOK HTML DIMULAI SETELAH SEMUA LOGIKA HEADER SELESAI
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -28,7 +32,18 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-    
+    <?php
+    if (isset($_SESSION['login_success'])) {
+        echo '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 w-full max-w-sm mx-auto" role="alert">';
+        echo '<strong>Berhasil! </strong>';
+        echo '<span class="block sm:inline">' . htmlspecialchars($_SESSION['login_success']) . '</span>';
+        echo '</div>';
+        
+        // Hapus pesan success dari session
+        unset($_SESSION['login_success']);
+    }
+
+    ?>
     <form action="proses_login.php" method="POST" class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
         <h2 class="text-3xl font-bold mb-6 text-center text-blue-600">Silakan Login</h2>
         

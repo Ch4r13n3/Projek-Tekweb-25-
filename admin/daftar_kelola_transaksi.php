@@ -13,17 +13,18 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
 // =================================================================
 
 $action = $_GET['aksi'] ?? null;
-$id_transaksi = $_GET['id'] ?? null;
+// KOREKSI UTAMA: Gunakan $kode_booking (string) yang diambil dari 'id'
+$kode_booking = $_GET['id'] ?? ''; 
 
-if ($action && $id_transaksi) {
-    
-    // 1. Ambil ID Kamar dari transaksi ini dulu
-    $stmt_cek = $conn->prepare("SELECT id_kamar FROM transaksi WHERE id_transaksi = ?");
-    $stmt_cek->bind_param("i", $id_transaksi);
+// KOREKSI KONDISI IF: Cek jika aksi ada DAN kode_booking TIDAK KOSONG
+if ($action && !empty($kode_booking)) {
+    // 1. Ambil ID Kamar dari transaksi ini
+    $stmt_cek = $conn->prepare("SELECT id_kamar FROM transaksi WHERE kode_booking = ?");
+    $stmt_cek->bind_param("s", $kode_booking);
     $stmt_cek->execute();
     $res_cek = $stmt_cek->get_result();
     $data_tr = $res_cek->fetch_assoc();
-    $id_kamar = $data_tr['id_kamar'];
+    $id_kamar = $data_tr['id_kamar'] ?? 0;
     $stmt_cek->close();
 
     $new_status_transaksi = '';
@@ -31,55 +32,98 @@ if ($action && $id_transaksi) {
 
     // 2. Tentukan Status Baru
     if ($action == 'konfirmasi') {
-        // Tamu Check-in
+    // Tamu Check-in
         $new_status_transaksi = 'Check In'; 
         $new_status_kamar = 'Terisi'; 
     } elseif ($action == 'selesai') {
-        // Tamu Check-out
+    // Tamu Check-out
         $new_status_transaksi = 'Selesai'; 
         $new_status_kamar = 'Kotor'; // Kamar jadi kotor setelah tamu keluar
     } elseif ($action == 'batalkan') {
-        // Booking Dibatalkan
+    // Booking Dibatalkan
         $new_status_transaksi = 'Dibatalkan'; 
         $new_status_kamar = 'Tersedia'; // Kamar kembali bisa dipesan
     }
 
-    // 3. Eksekusi Update (Dua Tabel Sekaligus)
-    if ($new_status_transaksi && $id_kamar) {
-        // Update Transaksi
-        $stmt1 = $conn->prepare("UPDATE transaksi SET status_transaksi = ? WHERE id_transaksi = ?");
-        $stmt1->bind_param("si", $new_status_transaksi, $id_transaksi);
-        $stmt1->execute();
-        $stmt1->close();
+    // 3. Eksekusi Update Menggunakan Transaksi Database
+    if ($new_status_transaksi && $id_kamar > 0) {
+        $conn->begin_transaction(); // Mulai Transaksi
 
-        // Update Status Kamar (Sinkronisasi Otomatis)
-        $stmt2 = $conn->prepare("UPDATE kamar SET status = ? WHERE id_kamar = ?");
-        $stmt2->bind_param("si", $new_status_kamar, $id_kamar);
-        $stmt2->execute();
-        $stmt2->close();
+        try {
+            // Update Transaksi
+            $stmt1 = $conn->prepare("UPDATE transaksi SET status_transaksi = ? WHERE kode_booking = ?");
+            $stmt1->bind_param("ss", $new_status_transaksi, $kode_booking); 
+            $stmt1->execute();
+            $stmt1->close();
 
-        echo "<script>alert('Status berhasil diperbarui!'); window.location='daftar_kelola_transaksi.php';</script>";
-        exit;
+            //Update Status Kamar (Sinkronisasi Otomatis)
+            $stmt2 = $conn->prepare("UPDATE kamar SET status = ? WHERE id_kamar = ?");
+            $stmt2->bind_param("si", $new_status_kamar, $id_kamar);
+            $stmt2->execute();
+            $stmt2->close();
+            $conn->commit(); // Commit jika semua sukses
+
+            // Flash Message Sukses
+            $_SESSION['flash_message'] = [
+                'type' => 'success', 
+                'text' => "Status Transaksi **#$kode_booking** berhasil diubah menjadi **$new_status_transaksi**."
+            ];
+
+        } catch (mysqli_sql_exception $e) {
+            $conn->rollback(); // Rollback jika ada yang gagal
+            error_log("Transaction failed: " . $e->getMessage());
+
+            // Flash Message Gagal
+            $_SESSION['flash_message'] = [
+                'type' => 'error', 
+                'text' => "Gagal memproses transaksi **#$kode_booking**. Terjadi kesalahan sistem. (Code: T2)"
+            ];
+        }
+    } else {
+        // Kasus ID tidak valid atau aksi tidak dikenali
+        $_SESSION['flash_message'] = [
+            'type' => 'error', 
+            'text' => "Aksi tidak valid atau data kamar tidak ditemukan."
+        ];
     }
+    // --- OPTIMASI PENUTUPAN KONEKSI (SEBELUM REDIRECT) ---
+    if (isset($conn)) {
+        $conn->close();
+    }
+    header("Location: daftar_kelola_transaksi.php");
+    exit;
 }
 
 // =================================================================
 // AMBIL DATA (READ & SEARCH)
 // =================================================================
 
+// Pastikan koneksi masih aktif sebelum digunakan lagi
+if (!isset($conn) || $conn->connect_error) {
+    require '../koneksi.php'; // Sambung ulang jika sudah ditutup di blok proses
+}
+
+
 $search = $_GET['cari'] ?? '';
-$sql = "SELECT t.*, k.nomor_kamar, k.lantai, tk.nama_tipe 
-        FROM transaksi t
-        JOIN kamar k ON t.id_kamar = k.id_kamar
-        JOIN tipe_kamar tk ON k.id_tipe_kamar = tk.id_tipe_kamar
-        WHERE t.nama_tamu LIKE ? OR k.nomor_kamar LIKE ?
-        ORDER BY t.tgl_transaksi DESC, t.id_transaksi DESC";
+$sql = "SELECT t.*, k.nomor_kamar, k.lantai, tk.nama_tipe, u.nama_lengkap AS nama_tamu
+FROM transaksi t
+JOIN kamar k ON t.id_kamar = k.id_kamar
+JOIN tipe_kamar tk ON k.id_tipe_kamar = tk.id_tipe_kamar
+JOIN users u ON t.id_user = u.id_user
+WHERE u.nama_lengkap LIKE ? OR k.nomor_kamar LIKE ?
+ORDER BY t.tgl_transaksi DESC, t.kode_booking DESC";
 
 $stmt = $conn->prepare($sql);
 $param = "%$search%";
 $stmt->bind_param("ss", $param, $param);
 $stmt->execute();
 $result = $stmt->get_result();
+$stmt->close(); // Tutup statement setelah mengambil hasil
+
+// Tutup koneksi setelah semua operasi database selesai (Best Practice)
+if (isset($conn)) {
+    $conn->close();
+}
 ?>
 
 <!DOCTYPE html>
@@ -106,11 +150,40 @@ $result = $stmt->get_result();
                 <li><a href="daftar_kelola_dataCustomer.php" class="flex items-center p-3 hover:bg-gray-800 rounded-lg transition-colors"><span class="mr-3 text-xl">👥</span>Data Customer</a></li>
                 <li><a href="daftar_kelola_transaksi.php" class="flex items-center p-3 bg-blue-600 rounded-lg shadow-md"><span class="mr-3 text-xl">💳</span>Transaksi</a></li>
                 <li><a href="laporan.php" class="flex items-center p-3 hover:bg-gray-800 rounded-lg transition-colors"><span class="mr-3 text-xl">📈</span>Laporan</a></li>
-                <li class="absolute bottom-6 w-52"><a href="../logout.php" class="flex items-center p-2 bg-red-600 hover:bg-red-700 rounded-lg"><span class="mr-2">🚪</span>Logout</a></li>
             </ul>
+             <div class="p-4 border-t border-gray-800">
+                <a href="../logout.php" class="flex items-center justify-center p-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-semibold shadow-lg">
+                    <span class="mr-2">🚪</span> Logout
+                </a>
+            </div>
         </nav>
-
         <main class="flex-1 p-6 md:p-8 overflow-y-auto relative">
+            
+            <?php
+            // TAMPILKAN FLASH MESSAGE JIKA ADA
+            if (isset($_SESSION['flash_message'])): 
+                $flash = $_SESSION['flash_message'];
+                $type = $flash['type'];
+                $text = $flash['text'];
+
+            // Tentukan class Tailwind berdasarkan tipe pesan
+                $bgColor = ($type == 'success') ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+                $icon = ($type == 'success') ? '✅' : '❌';
+            ?>
+                <div class="<?= $bgColor ?> border-l-4 p-4 rounded-lg mb-6 flex justify-between items-center transition duration-300 shadow-md" role="alert">
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-3"><?= $icon ?></span>
+                        <p class="font-medium"><?= $text ?></p>
+                    </div>
+                    <button onclick="this.parentElement.style.display='none';" class="text-xl font-bold ml-4 opacity-75 hover:opacity-100 transition leading-none">&times;</button>
+                </div>
+
+            <?php 
+                // HAPUS PESAN DARI SESI SETELAH DITAMPILKAN
+                unset($_SESSION['flash_message']);
+            endif; 
+            ?>
+            
             <div class="flex justify-between items-end mb-8">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900">Data Transaksi</h1>
@@ -128,43 +201,44 @@ $result = $stmt->get_result();
                     <table class="min-w-full text-sm text-left">
                         <thead class="bg-gray-800 text-white uppercase tracking-wider">
                             <tr>
-                                <th class="py-4 px-6">ID</th>
-                                <th class="py-4 px-6">Tamu</th>
-                                <th class="py-4 px-6">Kamar</th>
-                                <th class="py-4 px-6">Check-In / Out</th>
-                                <th class="py-4 px-6 text-right">Total Bayar</th>
-                                <th class="py-4 px-6 text-center">Status</th>
-                                <th class="py-4 px-6 text-center">Aksi</th>
+                                <th class="py-3 px-3 w-20">ID</th>
+                                <th class="py-3 px-4">Tamu</th>
+                                <th class="py-3 px-4">Kamar</th>
+                                <th class="py-3 px-4">Check-In / Out</th>
+                                <th class="py-3 px-4 text-right">Total Bayar</th>
+                                <th class="py-3 px-4 text-center w-32">Status</th>
+                                <th class="py-3 px-4 text-center w-24">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
                             <?php if ($result->num_rows > 0): ?>
                                 <?php while($row = $result->fetch_assoc()): ?>
                                 <tr class="hover:bg-blue-50 transition duration-150">
-                                    <td class="py-4 px-6 font-mono text-gray-500">#<?= $row['id_transaksi'] ?></td>
                                     
-                                    <td class="py-4 px-6">
+                                    <td class="py-3 px-3 font-mono text-gray-500 text-xs">#<?= $row['kode_booking'] ?></td>
+                                    
+                                    <td class="py-3 px-4">
                                         <div class="font-bold text-gray-800"><?= htmlspecialchars($row['nama_tamu']) ?></div>
                                         <div class="text-xs text-gray-500"><?= date('d M Y', strtotime($row['tgl_transaksi'])) ?></div>
                                     </td>
                                     
-                                    <td class="py-4 px-6">
+                                    <td class="py-3 px-4">
                                         <span class="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs font-bold">
                                             <?= $row['nomor_kamar'] ?>
                                         </span>
                                         <div class="text-xs text-gray-500 mt-1"><?= $row['nama_tipe'] ?></div>
                                     </td>
 
-                                    <td class="py-4 px-6 text-gray-600">
+                                    <td class="py-3 px-4 text-gray-600">
                                         <div class="text-xs">In: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_checkin'])) ?></span></div>
                                         <div class="text-xs">Out: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_checkout'])) ?></span></div>
                                     </td>
 
-                                    <td class="py-4 px-6 text-right font-bold text-green-600">
+                                    <td class="py-3 px-4 text-right font-bold text-green-600">
                                         Rp <?= number_format($row['total_harga'], 0, ',', '.') ?>
                                     </td>
 
-                                    <td class="py-4 px-6 text-center">
+                                    <td class="py-3 px-4 text-center">
                                         <?php 
                                             $st = strtolower($row['status_transaksi']);
                                             $badge = "bg-gray-100 text-gray-600";
@@ -178,26 +252,26 @@ $result = $stmt->get_result();
                                         </span>
                                     </td>
 
-                                    <td class="py-4 px-6 text-center">
-                                        <div class="flex items-center justify-center space-x-2">
+                                    <td class="py-3 px-4 text-center">
+                                        <div class="flex items-center justify-center space-x-1">
                                             <button onclick="bukaModalDetail(
-                                                '<?= $row['id_transaksi'] ?>',
-                                                '<?= htmlspecialchars($row['nama_tamu']) ?>',
+                                                '<?= $row['kode_booking'] ?>',
+                                                '<?= htmlspecialchars($row['nama_tamu'], ENT_QUOTES) ?>',
                                                 '<?= $row['nomor_kamar'] . ' - ' . $row['nama_tipe'] ?>',
                                                 '<?= date('d M Y', strtotime($row['tgl_checkin'])) ?>',
                                                 '<?= date('d M Y', strtotime($row['tgl_checkout'])) ?>',
                                                 'Rp <?= number_format($row['total_harga'], 0, ',', '.') ?>',
                                                 '<?= $row['status_transaksi'] ?>'
-                                            )" class="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-lg" title="Detail">
+                                            )" class="bg-gray-200 hover:bg-gray-300 text-gray-700 p-1 rounded-lg text-sm" title="Detail">
                                                 📄
                                             </button>
 
                                             <?php if($st == 'pending'): ?>
-                                                <a href="daftar_kelola_transaksi.php?aksi=konfirmasi&id=<?= $row['id_transaksi'] ?>" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg shadow-sm" title="Check In" onclick="return confirm('Proses Check-In untuk tamu ini?')">✅</a>
-                                                <a href="daftar_kelola_transaksi.php?aksi=batalkan&id=<?= $row['id_transaksi'] ?>" class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow-sm" title="Batalkan" onclick="return confirm('Batalkan pesanan?')">❌</a>
+                                                <a href="daftar_kelola_transaksi.php?aksi=konfirmasi&id=<?= $row['kode_booking'] ?>" class="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded-lg text-sm" title="Check In" onclick="return confirm('Proses Check-In untuk tamu <?= htmlspecialchars($row['nama_tamu'], ENT_QUOTES) ?>?')">✅</a>
+                                                <a href="daftar_kelola_transaksi.php?aksi=batalkan&id=<?= $row['kode_booking'] ?>" class="bg-red-500 hover:bg-red-600 text-white p-1 rounded-lg text-sm" title="Batalkan" onclick="return confirm('Batalkan pesanan <?= htmlspecialchars($row['nama_tamu'], ENT_QUOTES) ?>?')">❌</a>
                                             
                                             <?php elseif($st == 'check in'): ?>
-                                                <a href="daftar_kelola_transaksi.php?aksi=selesai&id=<?= $row['id_transaksi'] ?>" class="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg shadow-sm" title="Check Out" onclick="return confirm('Proses Check-Out? Kamar akan diset menjadi Kotor.')">👋</a>
+                                                <a href="daftar_kelola_transaksi.php?aksi=selesai&id=<?= $row['kode_booking'] ?>" class="bg-green-500 hover:bg-green-600 text-white p-1 rounded-lg text-sm" title="Check Out" onclick="return confirm('Proses Check-Out untuk tamu <?= htmlspecialchars($row['nama_tamu'], ENT_QUOTES) ?>? Kamar akan diset menjadi Kotor.')">👋</a>
                                             <?php endif; ?>
                                         </div>
                                     </td>

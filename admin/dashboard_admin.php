@@ -12,38 +12,43 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
 // == LOGIKA HITUNG STATISTIK (DARI DATABASE) ==
 // =========================================================
 
-// A. Hitung Kamar Terisi
-$query_terisi = "SELECT COUNT(*) as total FROM kamar WHERE status = 'Terisi'";
-$res_terisi = $conn->query($query_terisi);
-$row_terisi = $res_terisi->fetch_assoc();
-$kamar_terisi = $row_terisi['total'];
+// Karena semua query di bawah ini adalah SELECT sederhana tanpa input user, 
+// kita bisa menggunakan $conn->query() untuk efisiensi, tetapi
+// untuk total pendapatan, kita akan gunakan Prepared Statement.
 
-// B. Hitung Kamar Kosong (Tersedia)
-$query_kosong = "SELECT COUNT(*) as total FROM kamar WHERE status = 'Tersedia'";
-$res_kosong = $conn->query($query_kosong);
-$row_kosong = $res_kosong->fetch_assoc();
-$kamar_kosong = $row_kosong['total'];
+// A. Hitung Kamar Terisi, Kosong, Maintenance
+$kamar_terisi = $conn->query("SELECT COUNT(*) as total FROM kamar WHERE status = 'Terisi'")->fetch_assoc()['total'] ?? 0;
+$kamar_kosong = $conn->query("SELECT COUNT(*) as total FROM kamar WHERE status = 'Tersedia'")->fetch_assoc()['total'] ?? 0;
+$kamar_maintenance = $conn->query("SELECT COUNT(*) as total FROM kamar WHERE status IN ('Kotor', 'Perbaikan')")->fetch_assoc()['total'] ?? 0;
 
-// C. Hitung Kamar Kotor / Perbaikan (Opsional, untuk info tambahan)
-$query_lain = "SELECT COUNT(*) as total FROM kamar WHERE status IN ('Kotor', 'Perbaikan')";
-$res_lain = $conn->query($query_lain);
-$row_lain = $res_lain->fetch_assoc();
-$kamar_maintenance = $row_lain['total'];
 
-// D. Total Pendapatan Bulan Ini
-$total_pendapatan_bulan_ini = "0"; // Ganti logika ini nanti jika tabel transaksi sudah siap.
+// D. Total Pendapatan Bulan Ini (MENGGUNAKAN PREPARED STATEMENT)
+$total_pendapatan_bulan_ini = 0; 
+$current_month = date('m');
+$current_year = date('Y');
+
 $cek_tabel = $conn->query("SHOW TABLES LIKE 'transaksi'");
-if($cek_tabel->num_rows >0){
-    $query_uang = "SELECT SUM(total_harga) as total from transaksi
-                    where status_transaksi = 'Lunas'
-                    and month(tgl_transaksi) = MONTH(CURRENT_DATE())
-                    AND YEAR(tgl_transaksi) = YEAR(CURRENT_DATE())";
-    $res_uang = $conn->query($query_uang);
-    if($res_uang){
+if ($cek_tabel && $cek_tabel->num_rows > 0) {
+    
+    $query_uang = "SELECT SUM(total_harga) as total 
+                   FROM transaksi
+                   WHERE status_transaksi IN ('Selesai', 'Check In')
+                   AND MONTH(tgl_transaksi) = ?
+                   AND YEAR(tgl_transaksi) = ?";
+    
+    $stmt_uang = $conn->prepare($query_uang);
+    // 'ii' untuk 2 integer (bulan dan tahun)
+    $stmt_uang->bind_param("ii", $current_month, $current_year); 
+    $stmt_uang->execute();
+    $res_uang = $stmt_uang->get_result();
+
+    if ($res_uang) {
         $row_uang = $res_uang->fetch_assoc();
         $total_pendapatan_bulan_ini = $row_uang['total'] ?? 0;
     }
+    $stmt_uang->close();
 }
+
 
 // =========================================================
 // == LOGIKA DENAH KAMAR (PER LANTAI) ==
@@ -57,11 +62,15 @@ $sql_denah = "SELECT kamar.*, tipe_kamar.nama_tipe
 $result_denah = $conn->query($sql_denah);
 
 // Kita kelompokkan data ke dalam Array Multidimensi
-// Format: $denah_lantai[1] = [kamar_101, kamar_102...]
 $denah_lantai = [];
 while($row = $result_denah->fetch_assoc()) {
     $lantai = $row['lantai'];
     $denah_lantai[$lantai][] = $row;
+}
+
+// 5. Tutup koneksi database
+if (isset($conn)) {
+    $conn->close();
 }
 
 ?>
@@ -166,11 +175,11 @@ while($row = $result_denah->fetch_assoc()) {
 
                                         if($status_text == 'Tersedia') $bg_color = "bg-green-500 hover:bg-green-600";
                                         elseif($status_text == 'Terisi') $bg_color = "bg-red-500 hover:bg-red-600";
-                                        elseif($status_text == 'Kotor') $bg_color = "bg-yellow-400 hover:bg-yellow-500 text-yellow-900"; // Kuning textnya gelap biar terbaca
+                                        elseif($status_text == 'Kotor') $bg_color = "bg-yellow-400 hover:bg-yellow-500 text-yellow-900"; 
                                         elseif($status_text == 'Perbaikan') $bg_color = "bg-gray-600 hover:bg-gray-700";
                                     ?>
 
-                                    <div class="<?php echo $bg_color; ?> text-white p-3 rounded-lg shadow-sm text-center transition transform hover:scale-105 cursor-pointer relative group" 
+                                    <a href="edit_kamar.php?id=<?= $kamar['id_kamar'] ?>" class="<?php echo $bg_color; ?> text-white p-3 rounded-lg shadow-sm text-center transition transform hover:scale-105 cursor-pointer relative group" 
                                          title="<?php echo $kamar['nomor_kamar'] . ' - ' . $status_text . ' (' . $kamar['nama_tipe'] . ')'; ?>">
                                         
                                         <div class="text-lg font-bold"><?php echo $kamar['nomor_kamar']; ?></div>
@@ -186,12 +195,11 @@ while($row = $result_denah->fetch_assoc()) {
                                             <?php echo $kamar['nama_tipe']; ?><br>
                                             Status: <?php echo $status_text; ?>
                                         </div>
-                                    </div>
+                                    </a>
                                 <?php endforeach; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
-
                 <?php endif; ?>
             </section>
 

@@ -1,3 +1,28 @@
+<!-- register.php -->
+<?php
+session_start();
+include 'koneksi.php';
+
+// Ambil pesan error untuk ditampilkan
+$error_message = $_SESSION['register_error'] ?? null;
+if (isset($_SESSION['register_error'])) {
+    unset($_SESSION['register_error']);
+}
+
+// Pastikan tidak ada pengguna yang sudah login mencoba mengakses register
+if (isset($_SESSION['loggedin'])) {
+    // Alihkan ke dashboard yang sesuai jika sudah login
+    if ($_SESSION['role'] == 'admin') {
+        header("Location: admin/dashboard_admin.php");
+    } elseif ($_SESSION['role'] == 'resepsionis') {
+        header("Location: resepsionis/dashboard_resepsionis.php");
+    } else {
+        header("Location: guest/index.php");
+    }
+    exit;
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +34,12 @@
     
     <form action="proses_register.php" method="POST" class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
         <h2 class="text-3xl font-bold mb-6 text-center text-blue-600">Buat Akun Baru</h2>
-        
+        <?php if ($error_message): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <span class="block sm:inline"><?php echo htmlspecialchars($error_message); ?></span>
+            </div>
+        <?php endif; ?>
+
         <div class="mb-4">
             <label for="nama_lengkap" class="block text-gray-700 text-sm font-bold mb-2">Nama Lengkap:</label>
             <input type="text" id="nama_lengkap" name="nama_lengkap" required 
@@ -29,12 +59,15 @@
         </div>
 
         <div class="mb-4">
-            <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Daftar sebagai:</label>
-            <select name="role" id="role" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700">
-                <option value="admin">Admin</option>
-                <option value="resepsionis">Resepsionis</option>
-                <option value="user">Guest</option>
-            </select>
+            <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email:</label>
+            <input type="email" id="email" name="email" required 
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700">
+        </div>
+
+        <div class="mb-4">
+            <label for="no_telp" class="block text-gray-700 text-sm font-bold mb-2">Nomor Telepon (Opsional):</label>
+            <input type="tel" id="no_telp" name="no_telp" 
+                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700">
         </div>
         
         <div class="flex items-center justify-between mt-6">

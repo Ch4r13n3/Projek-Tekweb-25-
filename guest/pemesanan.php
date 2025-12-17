@@ -1,9 +1,62 @@
+<!-- guest/pemesanan.php -->
+
+<?php
+session_start();
+// Pastikan path koneksi.php sudah benar (asumsi /guest/pemesanan.php)
+require '../koneksi.php'; 
+
+// --- 1. AMBIL DAN HITUNG DATA DARI URL ---
+$tipe_id = $_GET['tipe_id'] ?? 1;
+$checkin = $_GET['checkin'] ?? date('Y-m-d');
+$checkout = $_GET['checkout'] ?? date('Y-m-d', strtotime('+1 day'));
+$jml = $_GET['jml'] ?? 1;
+
+// Hitung lama menginap
+$dt_in = new DateTime($checkin);
+$dt_out = new DateTime($checkout);
+$interval = $dt_in->diff($dt_out);
+$lama = $interval->days;
+
+if ($lama <= 0) $lama = 1;
+$jml = (int)$jml; // Pastikan jumlah kamar adalah integer
+
+// --- 2. AMBIL DETAIL TIPE KAMAR DARI DATABASE ---
+$tipe_kamar = null;
+$error_fetching = false;
+
+try {
+    $stmt = $conn->prepare("SELECT nama_tipe, harga_per_malam FROM tipe_kamar WHERE id_tipe_kamar = ?");
+    $stmt->bind_param("i", $tipe_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $tipe_kamar = $result->fetch_assoc();
+    $stmt->close();
+} catch (Exception $e) {
+    $error_fetching = true;
+    // Log error (gunakan ini jika di lingkungan produksi)
+    // error_log("Database error fetching room type: " . $e->getMessage());
+}
+
+if (!$tipe_kamar) {
+    $error_fetching = true;
+} else {
+    // Hitung total
+    $harga_per_malam = $tipe_kamar['harga_per_malam'];
+    $total_bayar = $harga_per_malam * $lama * $jml;
+}
+
+// --- 3. FUNGSI PELENGKAP ---
+function formatRupiah($angka) {
+    return 'Rp ' . number_format($angka, 0, ',', '.');
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pemesanan Kamar</title>
+    <title>Pesan Kamar - Cloud Nine In</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50">
@@ -14,153 +67,95 @@
                 <li><a href="index.php" class="text-gray-700 hover:text-blue-600 font-medium">Home</a></li>
                 <li><a href="index.php#populer" class="text-gray-700 hover:text-blue-600 font-medium">Kamar Populer</a></li>
                 <li><a href="index.php#cek-pesanan" class="text-gray-700 hover:text-blue-600 font-medium">Cek Pesanan Saya</a></li>
-                <li>
-                    <a href="login.php"
-                    class="bg-[#134686] hover:bg-[#27548A] text-white font-bold py-2 px-4 rounded-lg transition duration-300">Login</a></li>
+                <li><a href="../login.php" class="bg-[#134686] hover:bg-[#27548A] text-white font-bold py-2 px-4 rounded-lg transition duration-300">Login</a></li>
             </ul>
         </div>
     </nav>
 
     <main class="container mx-auto px-6 py-12">
-        <h1 class="text-4xl font-extrabold text-gray-800 mb-8 text-center">Form Pemesanan Kamar</h1>
-        
-        <form action="konfirmasi_pembayaran.php" method="POST" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <div class="lg:col-span-2 space-y-8 p-6 bg-white rounded-xl shadow-lg">
-                
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-2 mb-4">1. Data Pemesan</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="nama" class="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                            <input type="text" id="nama" name="nama" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="ktp" class="block text-sm font-medium text-gray-700">Nomor KTP</label>
-                            <input type="text" id="ktp" name="ktp" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="telp" class="block text-sm font-medium text-gray-700">No. Telepon</label>
-                            <input type="tel" id="telp" name="telp" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" id="email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        </div>
-                    </div>
+        <?php if ($error_fetching): ?>
+            <div class="max-w-3xl mx-auto p-8 bg-white rounded-xl shadow-2xl text-center border-t-8 border-red-500">
+                <h1 class="text-3xl font-extrabold text-gray-800 mb-4">Kesalahan Pemesanan</h1>
+                <p class="text-red-700 mb-6 font-medium">Detail kamar tidak ditemukan. Harap kembali ke halaman pencarian dan coba lagi.</p>
+                <a href="index.php" class="mt-8 inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-lg">Kembali ke Beranda</a>
+            </div>
+        <?php else: ?>
+            <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden">
+                <div class="p-8 border-b">
+                    <h1 class="text-3xl font-extrabold text-blue-600">Konfirmasi Detail Pemesan</h1>
+                    <p class="text-gray-500">Lengkapi data di bawah ini untuk menyelesaikan pemesanan kamar Anda.</p>
                 </div>
 
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800 border-b pb-2 mb-4">2. Penggunaan Fasilitas Tambahan (Add-on)</h2>
-                    <div class="space-y-3">
-                        <div class="flex items-start">
-                            <input id="addon_breakfast" name="addon_breakfast" type="checkbox" value="200000" class="h-4 w-4 text-blue-600 border-gray-300 rounded mt-1">
-                            <label for="addon_breakfast" class="ml-3 block text-sm font-medium text-gray-900">
-                                Sarapan (Breakfast) - Rp 100.000 / Tamu / Malam (Total Biaya Estimasi: **Rp 400.000**) 
-                            </label>
-                        </div>
-                        <div class="flex items-start">
-                            <input id="addon_laundry" name="addon_laundry" type="checkbox" value="50000" class="h-4 w-4 text-blue-600 border-gray-300 rounded mt-1">
-                            <label for="addon_laundry" class="ml-3 block text-sm font-medium text-gray-900">
-                                Layanan Laundry Ekspres - Rp 50.000 (Biaya Tetap)
-                            </label>
-                        </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 p-8">
+                    <div class="md:col-span-1 bg-gray-50 p-6 rounded-lg border border-gray-200 h-fit">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Ringkasan Pesanan</h2>
+                        <ul class="space-y-3 text-sm">
+                            <li><strong>Tipe Kamar:</strong> <span class="float-right font-medium text-blue-600"><?php echo htmlspecialchars($tipe_kamar['nama_tipe']); ?></span></li>
+                            <li><strong>Check-in:</strong> <span class="float-right"><?php echo date('d M Y', strtotime($checkin)); ?></span></li>
+                            <li><strong>Check-out:</strong> <span class="float-right"><?php echo date('d M Y', strtotime($checkout)); ?></span></li>
+                            <li><strong>Lama Menginap:</strong> <span class="float-right"><?php echo $lama; ?> Malam</span></li>
+                            <li><strong>Jumlah Kamar:</strong> <span class="float-right"><?php echo $jml; ?> Unit</span></li>
+                            <li class="pt-3 border-t font-bold text-lg">
+                                Total Bayar: 
+                                <span class="float-right text-red-600"><?php echo formatRupiah($total_bayar); ?></span>
+                            </li>
+                            <li class="text-xs text-gray-500 pt-2">
+                                *Pembayaran dilakukan di halaman selanjutnya (Konfirmasi) atau di tempat.
+                            </li>
+                        </ul>
                     </div>
-                    <input type="hidden" id="total_additional" name="total_additional" value="0">
-                </div>
 
-                <div class="mt-6">
-                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 shadow-md">
-                        Lanjut ke Pembayaran
-                    </button>
+                    <div class="md:col-span-2">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Data Diri Pemesan</h2>
+                        <form action="konfirmasi.php" method="POST" class="space-y-4">
+                            
+                            <input type="hidden" name="tipe_id" value="<?php echo $tipe_id; ?>">
+                            <input type="hidden" name="checkin" value="<?php echo $checkin; ?>">
+                            <input type="hidden" name="checkout" value="<?php echo $checkout; ?>">
+                            <input type="hidden" name="lama" value="<?php echo $lama; ?>">
+                            <input type="hidden" name="jumlah_kamar" value="<?php echo $jml; ?>">
+
+
+                            <div>
+                                <label for="nama_pemesan" class="block text-sm font-medium text-gray-700">Nama Lengkap (Sesuai ID):</label>
+                                <input type="text" id="nama_pemesan" name="nama_pemesan" required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+
+                            <div>
+                                <label for="ktp_pemesan" class="block text-sm font-medium text-gray-700">Nomor KTP/Identitas:</label>
+                                <input type="text" id="ktp_pemesan" name="ktp_pemesan" required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="email_pemesan" class="block text-sm font-medium text-gray-700">Email (Untuk Notifikasi):</label>
+                                <input type="email" id="email_pemesan" name="email_pemesan" required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label for="telp_pemesan" class="block text-sm font-medium text-gray-700">Nomor Telepon:</label>
+                                <input type="tel" id="telp_pemesan" name="telp_pemesan" required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <button type="submit"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 shadow-md">
+                                Lanjut ke Konfirmasi Pembayaran
+                            </button>
+                            
+                        </form>
+                    </div>
                 </div>
             </div>
-
-            <div class="lg:col-span-1 p-6 bg-blue-100 rounded-xl shadow-lg h-fit sticky top-20">
-                <h2 class="text-2xl font-bold text-blue-800 border-b border-blue-300 pb-3 mb-4">3. Rincian Pesanan Anda</h2>
-                
-                <div class="space-y-3 text-gray-700">
-                    <p><strong>Tipe Kamar:</strong> Family Room</p>
-                    <p><strong>Harga Kamar / Malam:</strong> Rp 850.000</p>
-                    <p><strong>Tanggal Check-in:</strong> 01 Des 2025</p>
-                    <p><strong>Tanggal Check-out:</strong> 03 Des 2025</p>
-                    <p><strong>Lama Menginap:</strong> 2 Malam</p>
-                    <p><strong>Jumlah Tamu:</strong> 2 Orang</p>
-
-                    <div class="border-t border-blue-300 pt-3 mt-3">
-                        <p class="flex justify-between font-semibold">
-                            <span>Total Biaya Kamar (2 Malam):</span>
-                            <span>Rp 1.700.000</span>
-                        </p>
-                        <p class="flex justify-between text-sm text-red-600">
-                            <span>Total Biaya Tambahan (Estimasi):</span>
-                            <span id="display_additional_cost">Rp 0</span>
-                        </p>
-                    </div>
-                </div>
-
-                <div class="border-t-2 border-blue-800 pt-4 mt-4">
-                    <p class="flex justify-between text-xl font-extrabold text-blue-800">
-                        <span>TOTAL BIAYA MENGINAP:</span>
-                        <span id="display_grand_total">Rp 1.700.000</span>
-                    </p>
-                    <input type="hidden" id="grand_total" name="grand_total" value="1700000">
-                </div>
-            </div>
-        </form>
+        <?php endif; ?>
     </main>
 
-
-    <footer class="bg-gray-800 text-white py-10">
-        <div class="container mx-auto text-center">
-            <p>&copy; 2025 Cloud Nine In. Dibuat oleh Kelompok Tekweb.</p>
-            <p class="text-gray-400 text-sm mt-2">Catherine, Charlene, Sheryl, & Rafa</p>
+    <footer class="bg-gray-800 text-white mt-12">
+        <div class="container mx-auto px-6 py-4 text-center">
+            <p>&copy; 2025 Cloud Nine In. All rights reserved.</p>
         </div>
     </footer>
-    
-    <script>
-        // Total Kamar: 2 Malam x Rp 850.000 = Rp 1.700.000
-        const roomCost = 1700000; 
-        // Sarapan: 2 Tamu x 2 Malam x Rp 100.000 = Rp 400.000
-        const breakfastPrice = 400000; 
-        const laundryPrice = 50000; 
-        
-        const checkboxBreakfast = document.getElementById('addon_breakfast');
-        const checkboxLaundry = document.getElementById('addon_laundry');
-        const displayAdditionalCost = document.getElementById('display_additional_cost');
-        const displayGrandTotal = document.getElementById('display_grand_total');
-        const inputGrandTotal = document.getElementById('grand_total');
-        const inputTotalAdditional = document.getElementById('total_additional');
-
-        function formatRupiah(number) {
-            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
-        }
-
-        function calculateTotal() {
-            let totalAdditional = 0;
-            if (checkboxBreakfast.checked) {
-                totalAdditional += breakfastPrice;
-            }
-            if (checkboxLaundry.checked) {
-                totalAdditional += laundryPrice;
-            }
-
-            const grandTotal = roomCost + totalAdditional;
-
-            displayAdditionalCost.textContent = formatRupiah(totalAdditional);
-            displayGrandTotal.textContent = formatRupiah(grandTotal);
-            inputGrandTotal.value = grandTotal;
-            inputTotalAdditional.value = totalAdditional;
-            
-            // Update value checkbox agar sesuai dengan harga saat terpilih
-            checkboxBreakfast.value = checkboxBreakfast.checked ? breakfastPrice : 0;
-            checkboxLaundry.value = checkboxLaundry.checked ? laundryPrice : 0;
-        }
-
-        checkboxBreakfast.addEventListener('change', calculateTotal);
-        checkboxLaundry.addEventListener('change', calculateTotal);
-
-        calculateTotal(); 
-    </script>
 </body>
 </html>

@@ -40,18 +40,22 @@ if ($result->num_rows === 1) {
         } elseif ($user['role'] == 'resepsionis') {
             header("Location: resepsionis/dashboard_resepsionis.php");
         } else {
-            header("Location: user/dashboard_user.php");
+            header("Location: guest/index.php");
         }
         exit; // Hentikan skrip
 
     } else {
         // Password SALAH
-        echo "Password salah. <a href='login.php'>Coba lagi</a>";
+        $_SESSION['login_error'] = "Username atau Password salah.";
+        header("Location: login.php");
+        exit;
     }
 } else {
     // Username TIDAK DITEMUKAN
     // (Pesan ini mungkin muncul jika username tidak ada di 'hotel_db')
-    echo "Username tidak ditemukan. <a href='login.php'>Coba lagi</a>";
+    $_SESSION['login_error'] = "Username atau Password salah.";
+    header("Location: login.php");
+    exit;
 }
 
 $stmt->close();

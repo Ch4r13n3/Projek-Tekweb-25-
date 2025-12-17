@@ -1,3 +1,4 @@
+<!-- daftar_kelola_tipekamar.php -->
 <?php
 session_start();
 require '../koneksi.php';
@@ -8,78 +9,181 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['role'] != 'admin') {
     exit;
 }
 
+// == HELPER FUNCTION: Menampilkan Flash Message dan membersihkannya
+// =================================================================
+function showFlashMessage() {
+    if (isset($_SESSION['flash_message']) && isset($_SESSION['flash_type'])) {
+        $message = $_SESSION['flash_message'];
+        $type = $_SESSION['flash_type']; // 'success' atau 'error'
+        $color = ($type == 'success') ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+        
+        echo '<div id="flash-message" class="' . $color . ' border px-4 py-3 rounded-md mb-6 transition-opacity duration-300 fade-in" role="alert">';
+        echo '<p class="font-bold">' . ucfirst($type) . '</p>';
+        echo '<p class="text-sm">' . htmlspecialchars($message) . '</p>';
+        echo '</div>';
+
+        // Hapus flash message setelah ditampilkan
+        unset($_SESSION['flash_message']);
+        unset($_SESSION['flash_type']);
+    }
+}
 // =================================================================
 // == BAGIAN "DAPUR" (LOGIKA PROSES) ==
 // =================================================================
 
 $action = $_GET['aksi'] ?? null;
 $method = $_SERVER['REQUEST_METHOD'];
+$redirect_to = 'daftar_kelola_tipekamar.php';
 
 // Logika TAMBAH DATA
 if ($method == 'POST' && $action == 'tambah') {
-    $nama_tipe          = $_POST['nama_tipe'];
-    $harga_per_malam    = $_POST['harga_per_malam'];
-    $kapasitas          = $_POST['kapasitas'];
-    $kategori_hunian    = $_POST['kategori_hunian'] ?? null;
-    $tingkat_fasilitas  = $_POST['tingkat_fasilitas'] ?? null;
+    // 1. Sanitasi Input POST
+    $nama_tipe          = htmlspecialchars($_POST['nama_tipe'] ?? '');
+    $harga_per_malam    = (int)($_POST['harga_per_malam'] ?? 0);
+    $kapasitas          = (int)($_POST['kapasitas'] ?? 0);
+    $kategori_hunian    = htmlspecialchars($_POST['kategori_hunian'] ?? '');
+    $tingkat_fasilitas  = htmlspecialchars($_POST['tingkat_fasilitas'] ?? '');
     
     $input_bed          = $_POST['jenis_tempat_tidur'] ?? [];
-    $jenis_tempat_tidur = implode(", ", $input_bed); 
+    // Pastikan nilai di array di-sanitasi sebelum di-implode
+    $sanitized_bed      = array_map('htmlspecialchars', $input_bed);
+    $jenis_tempat_tidur = implode(", ", $sanitized_bed); 
     
-    $luas_kamar         = $_POST['luas_kamar'] ?? null;
-    $deskripsi          = $_POST['deskripsi'];
-    $add_on             = $_POST['add_on'];
+    $luas_kamar         = htmlspecialchars($_POST['luas_kamar'] ?? '');
+    $deskripsi          = htmlspecialchars($_POST['deskripsi'] ?? '');
+    $add_on             = htmlspecialchars($_POST['add_on'] ?? '');
 
     $nama_foto = "default.jpg"; 
+    $upload_success = true;
+    $target_dir = "../uploads/"; 
+
     if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
-        $target_dir = "../uploads/"; 
-        $ext = pathinfo($_FILES["foto"]["name"], PATHINFO_EXTENSION);
-        $nama_foto = "tipe_kamar_" . time() . "." . $ext; 
-        move_uploaded_file($_FILES["foto"]["tmp_name"], $target_dir . $nama_foto);
+        $file_name = $_FILES["foto"]["name"];
+        $file_tmp = $_FILES["foto"]["tmp_name"];
+        $ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        
+        $max_size = 5 * 1024 * 1024; // 5 MB
+        if ($_FILES['foto']['size'] > $max_size) {
+            $_SESSION['flash_message'] = 'Gagal: Ukuran file foto maksimal 5MB.';
+            $_SESSION['flash_type'] = 'error';
+            $upload_success = false;
+        }
+
+        // Cek ekstensi gambar yang diizinkan
+        $allowed_ext = ['jpg', 'jpeg', 'webp','png'];
+        if (in_array($ext, $allowed_ext)) {
+            $nama_foto = "tipe_kamar_" . time() . "_" . uniqid() . "." . $ext; 
+            $target_file = $target_dir . $nama_foto;
+
+            // Pastikan direktori 'uploads' ada
+            if (!is_dir($target_dir)) {
+                mkdir($target_dir, 0777, true);
+            }
+
+            if (!move_uploaded_file($file_tmp, $target_file)) {
+                $_SESSION['flash_message'] = 'Gagal mengunggah file foto. Pastikan folder uploads memiliki izin tulis.';
+                $_SESSION['flash_type'] = 'error';
+                $upload_success = false;
+            }
+        } else {
+            $_SESSION['flash_message'] = 'Format file foto tidak diizinkan. Hanya .jpg, .jpeg, atau .webp yang diperbolehkan.';
+            $_SESSION['flash_type'] = 'error';
+            $upload_success = false;
+        }
     }
 
-    $query_insert = "INSERT INTO tipe_kamar 
-                        (nama_tipe, harga_per_malam, kapasitas, foto, deskripsi, add_on, 
-                         kategori_hunian, tingkat_fasilitas, jenis_tempat_tidur, luas_kamar) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    
-    $stmt_insert = $conn->prepare($query_insert);
-    $stmt_insert->bind_param("siisssssss", 
-        $nama_tipe, $harga_per_malam, $kapasitas, $nama_foto, $deskripsi, 
-        $add_on, $kategori_hunian, $tingkat_fasilitas, $jenis_tempat_tidur, $luas_kamar
-    );
-    
-    if ($stmt_insert->execute()) {
-        echo "<script>alert('Data berhasil ditambahkan!'); window.location='daftar_kelola_tipekamar.php';</script>";
-    } else {
-        echo "Error: " . $stmt_insert->error;
+    if ($upload_success) {
+        // Menggunakan Prepared Statement untuk INSERT
+        $query_insert = "INSERT INTO tipe_kamar 
+                            (nama_tipe, harga_per_malam, kapasitas, foto, deskripsi, add_on, 
+                             kategori_hunian, tingkat_fasilitas, jenis_tempat_tidur, luas_kamar) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $stmt_insert = $conn->prepare($query_insert);
+        if ($stmt_insert === false) {
+             $_SESSION['flash_message'] = 'Error prepare: ' . $conn->error;
+             $_SESSION['flash_type'] = 'error';
+             header("Location: $redirect_to"); exit;
+        }
+
+        $stmt_insert->bind_param("siisssssss", 
+            $nama_tipe, $harga_per_malam, $kapasitas, $nama_foto, $deskripsi, 
+            $add_on, $kategori_hunian, $tingkat_fasilitas, $jenis_tempat_tidur, $luas_kamar
+        );
+        
+        if ($stmt_insert->execute()) {
+            $_SESSION['flash_message'] = 'Data Tipe Kamar berhasil ditambahkan!';
+            $_SESSION['flash_type'] = 'success';
+        } else {
+            // Jika ada error SQL, hapus file yang sudah terlanjur diupload (kecuali default.jpg)
+            if ($nama_foto != 'default.jpg' && file_exists($target_dir . $nama_foto)) {
+                unlink($target_dir . $nama_foto);
+            }
+            $_SESSION['flash_message'] = 'Gagal menambahkan data. Error: ' . $stmt_insert->error;
+            $_SESSION['flash_type'] = 'error';
+        }
+        $stmt_insert->close();
     }
-    $stmt_insert->close();
+    header("Location: $redirect_to");
     exit;
 }
 
 // Logika HAPUS
 if ($action == 'hapus') {
-    $id_tipe = $_GET['id'] ?? 0;
-    
+   $id_tipe = (int)($_GET['id'] ?? 0);
+
+    // ==================================================
+    // 💡 LANGKAH 1: CEK INTEGRITAS REFERENSIAL (NEW!)
+    // ==================================================
+    $stmt_check = $conn->prepare("SELECT COUNT(*) FROM kamar WHERE id_tipe_kamar = ?");
+    $stmt_check->bind_param("i", $id_tipe);
+    $stmt_check->execute();
+    $result_check = $stmt_check->get_result();
+    $row_check = $result_check->fetch_row();
+    $count_kamar = $row_check[0];
+    $stmt_check->close();
+
+    // Jika ada kamar yang menggunakan Tipe Kamar ini, batalkan hapus.
+    if ($count_kamar > 0) {
+        $_SESSION['flash_message'] = "Gagal menghapus! Tipe kamar ini masih digunakan oleh **$count_kamar unit kamar**. Harap hapus unit kamar tersebut terlebih dahulu.";
+        $_SESSION['flash_type'] = 'error';
+        header("Location: $redirect_to"); 
+        exit;
+    }
+
+    // 2. Ambil nama file foto
     $stmt_select = $conn->prepare("SELECT foto FROM tipe_kamar WHERE id_tipe_kamar = ?");
     $stmt_select->bind_param("i", $id_tipe);
     $stmt_select->execute();
     $result_foto = $stmt_select->get_result();
-    if ($row_foto = $result_foto->fetch_assoc()) {
+    $row_foto = $result_foto->fetch_assoc();
+    $stmt_select->close();
+    
+    // 3. Hapus file foto (jika bukan 'default.jpg')
+    if ($row_foto) {
         $file_path = "../uploads/" . $row_foto['foto'];
+        // Hapus hanya jika file ada dan bukan 'default.jpg'
         if (file_exists($file_path) && $row_foto['foto'] != 'default.jpg') {
             unlink($file_path);
         }
     }
-    $stmt_select->close();
 
+    // 4. Hapus data dari database
     $stmt_delete = $conn->prepare("DELETE FROM tipe_kamar WHERE id_tipe_kamar = ?");
     $stmt_delete->bind_param("i", $id_tipe);
-    $stmt_delete->execute();
+    
+    if ($stmt_delete->execute()) {
+        $_SESSION['flash_message'] = "Tipe kamar dan foto terkait berhasil dihapus!";
+        $_SESSION['flash_type'] = 'success';
+    } else {
+        $_SESSION['flash_message'] = "Gagal menghapus data. Error: " . $stmt_delete->error;
+        $_SESSION['flash_type'] = 'error';
+    }
+    
     $stmt_delete->close();
 
-    header("Location: daftar_kelola_tipekamar.php");
+    // Redirect ke halaman daftar
+    header("Location: $redirect_to");
     exit;
 }
 
@@ -102,6 +206,34 @@ $result = $stmt->get_result();
         .tab-active { background-color: #2563eb; color: white; border-color: #2563eb; }
         .tab-inactive { background-color: white; color: #4b5563; border-color: #e5e7eb; }
         .tab-inactive:hover { background-color: #f3f4f6; }
+        /* Style untuk animasi fade-in */
+        .fade-in {
+            animation: fadeIn ease 0.5s;
+            -webkit-animation: fadeIn ease 0.5s;
+            -moz-animation: fadeIn ease 0.5s;
+            -o-animation: fadeIn ease 0.5s;
+            -ms-animation: fadeIn ease 0.5s;
+        }
+        @keyframes fadeIn {
+            0% {opacity:0;}
+            100% {opacity:1;}
+        }
+        @-moz-keyframes fadeIn {
+            0% {opacity:0;}
+            100% {opacity:1;}
+        }
+        @-webkit-keyframes fadeIn {
+            0% {opacity:0;}
+            100% {opacity:1;}
+        }
+        @-o-keyframes fadeIn {
+            0% {opacity:0;}
+            100% {opacity:1;}
+        }
+        @-ms-keyframes fadeIn {
+            0% {opacity:0;}
+            100% {opacity:1;}
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -133,7 +265,8 @@ $result = $stmt->get_result();
                     <p class="text-gray-500 mt-1">Tambah, edit, dan atur spesifikasi kamar hotel.</p>
                 </div>
             </div>
-
+            
+            <?php showFlashMessage(); ?>
             <div class="flex space-x-2 mb-6 border-b border-gray-200 pb-1">
                 <button onclick="switchTab('list')" id="btnList" class="px-6 py-2.5 rounded-t-lg font-medium text-sm transition-all duration-200 border-t border-l border-r tab-active flex items-center">
                     <span class="mr-2">📋</span> Daftar Data
@@ -157,7 +290,7 @@ $result = $stmt->get_result();
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Harga per Malam (Rp)</label>
-                                <input type="number" name="harga_per_malam" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Cth: 750000" required>
+                                <input type="number" name="harga_per_malam" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Cth: 750000" min="0" required>
                             </div>
                         </div>
                     </div>
@@ -171,7 +304,6 @@ $result = $stmt->get_result();
                                     <option value="" disabled selected>-- Pilih Kategori --</option>
                                     <option value="Single">Single Room (1 Tamu)</option>
                                     <option value="Double">Double Room (2 Tamu)</option>
-                                    <option value="Connecting Room">Connecting Room</option>
                                     <option value="Family">Family Room</option>
                                 </select>
                             </div>
@@ -233,6 +365,7 @@ $result = $stmt->get_result();
                                 <option value="Family Room">Family Room</option>
                                 <option value="Smoking Room">Smoking Room</option>
                             </select>
+                            <p class="text-xs text-gray-500 mt-1 ml-1">*Pemilihan ini akan mengisi deskripsi otomatis.</p>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
@@ -243,11 +376,12 @@ $result = $stmt->get_result();
                             <div class="flex flex-col gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Add-on</label>
-                                    <input type="text" name="add_on" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    <input type="text" name="add_on" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Cth: Akses Lounge, Voucher Spa">
+                                    <p class="text-xs text-gray-500 mt-1 ml-1">*Pisahkan dengan koma jika lebih dari satu.</p>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Foto Utama</label>
-                                    <input type="file" name="foto" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="image/*">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Foto Utama (JPG, JPEG, WEBP, PNG)</label>
+                                    <input type="file" name="foto" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="image/jpeg, image/jpg, image/webp, image/png">
                                 </div>
                             </div>
                         </div>
@@ -292,7 +426,7 @@ $result = $stmt->get_result();
                                     <td class="py-4 px-6 text-center">
                                         <div class="flex items-center justify-center space-x-2">
                                             <a href="edit_tipe_kamar.php?id=<?php echo $row['id_tipe_kamar']; ?>" class="bg-yellow-400 hover:bg-yellow-500 text-white p-2 rounded-lg shadow-sm" title="Edit">✏️</a>
-                                            <a href="daftar_kelola_tipekamar.php?aksi=hapus&id=<?php echo $row['id_tipe_kamar']; ?>" class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow-sm" onclick="return confirm('Yakin hapus?');" title="Hapus">🗑️</a>
+                                            <a href="daftar_kelola_tipekamar.php?aksi=hapus&id=<?php echo $row['id_tipe_kamar']; ?>" class="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg shadow-sm" onclick="return confirm('Yakin hapus data kamar dan file fotonya?');" title="Hapus">🗑️</a>
                                         </div>
                                     </td>
                                 </tr>
@@ -326,9 +460,9 @@ $result = $stmt->get_result();
         } else if (kategori === "Family") {
             kapasitas = 4;
             luas = "55 m²";
-        } else if (kategori === "Connecting Room") {
-            kapasitas = 4;
-            luas = "64 m² (2 x 32 m²)";
+        } else {
+             kapasitas = 0;
+             luas = "";
         }
 
         inputKapasitas.value = kapasitas;
@@ -340,7 +474,6 @@ $result = $stmt->get_result();
 
     // FUNGSI 2: Update Deskripsi
     function updateDeskripsi() {
-        // PERBAIKAN PENTING: Mendefinisikan variabel kategoriHunian yang sebelumnya hilang
         let kategoriHunian = document.getElementById("kategori_hunian").value;
         let fasilitas = document.getElementById("tingkat_fasilitas").value;
         let deskripsiBox = document.getElementById("deskripsi");
@@ -356,8 +489,8 @@ $result = $stmt->get_result();
             case "Deluxe":
                 teks = "Ukuran lebih luas dengan Balkon pribadi. Fasilitas mencakup: Bathtub, Kulkas mini (Minibar), Hairdryer, TV 40 inch, dan Brankas pribadi.";
                 break;
-            case "Family Room":
-                teks = "Kamar Keluarga: Ruangan sangat luas dengan area duduk (Sofa). Dilengkapi 1 Bed besar dan 1 Twin Bed, Smart TV 50 inch, Microwave, dan Meja makan kecil.";
+            case "Family Room": 
+                teks = "Kamar luas yang didesain untuk keluarga. Memiliki dua area tidur terpisah (atau King Bed + Twin Bed), kamar mandi besar dengan bathtub, dan area duduk yang nyaman.";
                 break;
             case "Smoking Room":
                 teks = "Kamar Khusus Merokok: Memiliki ventilasi udara khusus (Exhaust fan) atau akses langsung ke balkon terbuka. Dilengkapi asbak dan area sirkulasi udara yang baik.";
@@ -404,6 +537,21 @@ $result = $stmt->get_result();
             btnList.classList.remove('tab-active');
         }
     }
+    
+    // Panggil switchTab saat halaman pertama kali dimuat untuk memastikan tampilan yang benar
+    document.addEventListener('DOMContentLoaded', () => {
+        // Cek apakah ada aksi 'tambah' di URL, jika ada, pindah ke form
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('aksi') === 'tambah' && window.history.length > 1) {
+             // Asumsi: jika user baru submit form (ada aksi=tambah di URL tapi methodnya GET setelah redirect error/sukses), kembali ke list
+             switchTab('list');
+        } else {
+             switchTab('list'); // Default: tampilkan list
+        }
+        
+        // Atur agar spesifikasi terisi jika ada kategori yang dipilih saat load (untuk antisipasi error back)
+        updateSpesifikasi();
+    });
     </script>
 </body>
 </html>

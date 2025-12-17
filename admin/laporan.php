@@ -37,7 +37,7 @@ if($cek_tabel->num_rows > 0) {
                     JOIN kamar k ON t.id_kamar = k.id_kamar
                     JOIN tipe_kamar tk ON k.id_tipe_kamar = tk.id_tipe_kamar
                     JOIN users u ON t.id_user = u.id_user
-                    WHERE (t.status_transaksi = 'Selesai' OR t.status_transaksi = 'Check In')
+                    WHERE (t.status_transaksi = 'Lunas' OR t.status_transaksi = 'Check In')
                     AND t.tgl_transaksi BETWEEN ? AND ?
                     ORDER BY t.tgl_transaksi ASC";
 
@@ -59,12 +59,21 @@ if (isset($conn)) {
 }
 
 // Fungsi untuk mendapatkan badge warna status
+// function get_status_badge($status) {
+//     $st = strtolower($status);
+//     $badge = "bg-gray-100 text-gray-600";
+//     if($st == 'check in') $badge = "bg-blue-100 text-blue-800 border border-blue-200";
+//     elseif($st == 'selesai') $badge = "bg-green-100 text-green-800 border border-green-200";
+//     return "<span class='$badge px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide'>$status</span>";
+// }
+// 
+
 function get_status_badge($status) {
     $st = strtolower($status);
-    $badge = "bg-gray-100 text-gray-600";
-    if($st == 'check in') $badge = "bg-blue-100 text-blue-800 border border-blue-200";
-    elseif($st == 'selesai') $badge = "bg-green-100 text-green-800 border border-green-200";
-    return "<span class='$badge px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide'>$status</span>";
+    if($st == 'lunas') {
+        return "<span class='bg-green-100 text-green-800 border border-green-200 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide'>$status</span>";
+    }
+    return "<span class='bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide'>$status</span>";
 }
 ?>
 
@@ -169,8 +178,8 @@ function get_status_badge($status) {
                                         </td>
                                         <td class="py-2 px-4 text-right">
                                             <?php
-                                                $checkin = new DateTime($row['tgl_checkin']);
-                                                $checkout = new DateTime($row['tgl_checkout']);
+                                                $checkin = new DateTime($row['tgl_check_in']);
+                                                $checkout = new DateTime($row['tgl_check_out']);
                                                 $interval = $checkin->diff($checkout);
                                                 echo $interval->days . " Hari";
                                             ?>

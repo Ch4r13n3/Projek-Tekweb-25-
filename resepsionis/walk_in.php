@@ -111,6 +111,20 @@ if (isset($_POST['submit_walkin'])) {
             tanggal_pemesanan
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Check-in', 'Lunas', ?, ?, ?, NOW())";
 
+        // Tambahkan ini di dalam blok try { ... } setelah $stmt->execute() reservasi
+        $sql_transaksi = "INSERT INTO transaksi (kode_booking, id_user, id_kamar, tgl_check_in, tgl_check_out, total_harga, status_transaksi) 
+                  VALUES (?, ?, ?, ?, ?, ?, 'Lunas')";
+        $stmt_t = $conn->prepare($sql_transaksi);
+        $stmt_t->bind_param("siiisd", 
+            $kode,                      // Kode Booking WALK-
+            $id_user_petugas,           // ID Resepsionis yang melayani
+            $id_kamar,                  // ID Kamar fisik
+            $_POST['checkinDate_final'], 
+            $_POST['checkoutDate_final'], 
+            $_POST['total_bayar_final']
+        );
+        $stmt_t->execute();
+
         $total_bayar = $_POST['total_bayar_final']; // Ambil dari hitungan harga tipe kamar x durasi
         $status_pembayaran = 'Lunas'; // Karena tamu walk-in langsung bayar di tempat
 

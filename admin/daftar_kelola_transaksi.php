@@ -230,8 +230,8 @@ if (isset($conn)) {
                                     </td>
 
                                     <td class="py-3 px-4 text-gray-600">
-                                        <div class="text-xs">In: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_checkin'])) ?></span></div>
-                                        <div class="text-xs">Out: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_checkout'])) ?></span></div>
+                                        <div class="text-xs">In: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_check_in'])) ?></span></div>
+                                        <div class="text-xs">Out: <span class="font-medium"><?= date('d/m/Y', strtotime($row['tgl_check_out'])) ?></span></div>
                                     </td>
 
                                     <td class="py-3 px-4 text-right font-bold text-green-600">
@@ -258,8 +258,8 @@ if (isset($conn)) {
                                                 '<?= $row['kode_booking'] ?>',
                                                 '<?= htmlspecialchars($row['nama_tamu'], ENT_QUOTES) ?>',
                                                 '<?= $row['nomor_kamar'] . ' - ' . $row['nama_tipe'] ?>',
-                                                '<?= date('d M Y', strtotime($row['tgl_checkin'])) ?>',
-                                                '<?= date('d M Y', strtotime($row['tgl_checkout'])) ?>',
+                                                '<?= date('d M Y', strtotime($row['tgl_check_in'])) ?>',
+                                                '<?= date('d M Y', strtotime($row['tgl_check_out'])) ?>',
                                                 'Rp <?= number_format($row['total_harga'], 0, ',', '.') ?>',
                                                 '<?= $row['status_transaksi'] ?>'
                                             )" class="bg-gray-200 hover:bg-gray-300 text-gray-700 p-1 rounded-lg text-sm" title="Detail">

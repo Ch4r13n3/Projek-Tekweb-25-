@@ -18,6 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $kode = $_POST['kode_booking'];
     $action = $_POST['action'];
 
+        
+// --- LOGIKA PROSES VERIFIKASI (SETUJU/ACC) ---
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
+    $kode = $_POST['kode_booking'];
+    $action = $_POST['action'];
+
     if ($action == 'setujui') {
         // PENTING: Mengubah Pembayaran jadi 'Lunas' DAN Reservasi jadi 'Confirmed'
         $sql = "UPDATE reservasi SET 
@@ -44,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     header("Location: verifikasi_bayar.php");
     exit;
 }
-
+}
 // Ambil data yang berstatus 'Menunggu Verifikasi'
 $sql_verif = "SELECT r.*, u.nama_lengkap, tk.nama_tipe 
               FROM reservasi r

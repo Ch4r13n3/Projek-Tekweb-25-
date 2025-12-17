@@ -13,35 +13,74 @@ $msg = $_SESSION['msg'] ?? '';
 $alert_class = $_SESSION['alert_class'] ?? '';
 unset($_SESSION['msg'], $_SESSION['alert_class']);
 
-// --- LOGIKA PROSES ALOKASI ---
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['proses_alokasi'])) {
+if (isset($_POST['proses_alokasi'])) {
     $kode = $_POST['kode_booking'];
-    $id_kamar = $_POST['id_kamar'];
+    $id_kamar = $_POST['id_kamar']; // Nomor kamar yang dipilih resepsionis
 
     $conn->begin_transaction();
     try {
-        // Update tabel reservasi: isi id_kamar_ditempati
-        $sql = "UPDATE reservasi SET id_kamar_ditempati = ? WHERE kode_booking = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("is", $id_kamar, $kode);
+        // 1. Hubungkan reservasi dengan nomor kamar
+        $conn->query("UPDATE reservasi SET id_kamar_ditempati = '$id_kamar' WHERE kode_booking = '$kode'");
         
-        if (!$stmt->execute()) throw new Exception("Gagal update reservasi.");
+        // 2. Ubah status kamar jadi Terisi
+        $conn->query("UPDATE kamar SET status = 'Terisi' WHERE id_kamar = '$id_kamar'");
 
-        // Update status kamar menjadi 'Terisi' (Opsional, tergantung alur hotelmu)
-        // Jika alokasi dilakukan saat check-in, maka status kamar jadi 'Terisi'
-        $conn->query("UPDATE kamar SET status = 'Terisi' WHERE id_kamar = $id_kamar");
+        // 3. AMBIL DATA LENGKAP UNTUK TRANSAKSI (PENTING!)
+        $res = $conn->query("SELECT * FROM reservasi WHERE kode_booking = '$kode'")->fetch_assoc();
+
+        // 4. SIMPAN KE TABEL TRANSAKSI (Agar masuk ke laporan Admin)
+        $sql_t = "INSERT INTO transaksi (kode_booking, id_user, id_kamar, tgl_check_in, tgl_check_out, total_harga, status_transaksi) 
+                  VALUES (?, ?, ?, ?, ?, ?, 'Lunas')";
+        $stmt_t = $conn->prepare($sql_t);
+        
+        // Pastikan urutan bind_param sesuai: s (string), i (int), i (int), s (date), s (date), d (double/decimal)
+        $stmt_t->bind_param("siiisd", 
+            $res['kode_booking'], 
+            $res['id_user'], 
+            $id_kamar, 
+            $res['tanggal_checkin'], 
+            $res['tanggal_checkout'], 
+            $res['total_bayar']
+        );
+        $stmt_t->execute();
 
         $conn->commit();
-        $_SESSION['msg'] = "Berhasil! Kamar telah dialokasikan untuk pesanan $kode.";
-        $_SESSION['alert_class'] = "success";
-        header("Location: reservasi_list.php");
-        exit;
+        $_SESSION['msg'] = "Kamar berhasil dialokasikan dan pendapatan tercatat!";
     } catch (Exception $e) {
         $conn->rollback();
-        $_SESSION['msg'] = "Gagal Alokasi: " . $e->getMessage();
-        $_SESSION['alert_class'] = "danger";
+        echo "Error: " . $e->getMessage();
     }
 }
+
+// // --- LOGIKA PROSES ALOKASI ---
+// if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['proses_alokasi'])) {
+//     $kode = $_POST['kode_booking'];
+//     $id_kamar = $_POST['id_kamar'];
+
+//     $conn->begin_transaction();
+//     try {
+//         // Update tabel reservasi: isi id_kamar_ditempati
+//         $sql = "UPDATE reservasi SET id_kamar_ditempati = ? WHERE kode_booking = ?";
+//         $stmt = $conn->prepare($sql);
+//         $stmt->bind_param("is", $id_kamar, $kode);
+        
+//         if (!$stmt->execute()) throw new Exception("Gagal update reservasi.");
+
+//         // Update status kamar menjadi 'Terisi' (Opsional, tergantung alur hotelmu)
+//         // Jika alokasi dilakukan saat check-in, maka status kamar jadi 'Terisi'
+//         $conn->query("UPDATE kamar SET status = 'Terisi' WHERE id_kamar = $id_kamar");
+
+//         $conn->commit();
+//         $_SESSION['msg'] = "Berhasil! Kamar telah dialokasikan untuk pesanan $kode.";
+//         $_SESSION['alert_class'] = "success";
+//         header("Location: reservasi_list.php");
+//         exit;
+//     } catch (Exception $e) {
+//         $conn->rollback();
+//         $_SESSION['msg'] = "Gagal Alokasi: " . $e->getMessage();
+//         $_SESSION['alert_class'] = "danger";
+//     }
+// }
 
 // 2. Ambil data reservasi yang butuh alokasi (Status: Confirmed/Lunas tapi id_kamar masih kosong)
 $sql_butuh_alokasi = "SELECT r.*, tk.nama_tipe 

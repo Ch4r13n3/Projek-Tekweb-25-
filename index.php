@@ -27,22 +27,22 @@
             <h1 class="text-5xl font-bold mb-4">Selamat Datang di Cloud Nine In</h1>
             <p class="text-xl mb-10">Temukan kamar impian Anda dengan harga terbaik.</p>
 
-            <form action="hasil_pencarian.php" method="GET" 
+            <form action="guest/hasil_pencarian.php" method="GET" 
                  class="bg-white text-black p-6 rounded-lg shadow-xl max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 
                 <div class="text-left">
                     <label for="check_in" class="block text-sm font-medium text-gray-700">Check-in</label>
-                    <input type="date" id="check_in" name="check_in" value="2025-12-01" 
+                    <input type="date" id="check_in" name="check_in" value="<?php echo date('Y-m-d'); ?>" required
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" required>
                 </div>
                 <div class="text-left">
                     <label for="check_out" class="block text-sm font-medium text-gray-700">Check-out</label>
-                    <input type="date" id="check_out" name="check_out" value="2025-12-03" 
+                    <input type="date" id="check_out" name="check_out" value="<?php echo date('Y-m-d', strtotime('+1 day')); ?>" required
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" required>
                 </div>
                 <div class="text-left">
                     <label for="jumlah_tamu" class="block text-sm font-medium text-gray-700">Jumlah Tamu</label>
-                    <input type="number" id="jumlah_tamu" name="jumlah_tamu" min="1" value="2" 
+                    <input type="number" id="jumlah_tamu" name="jumlah_tamu" min="1" value="1" required
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" required>
                 </div>
                 <button type="submit" 
@@ -69,7 +69,7 @@
                         <p class="text-gray-600 mb-4">Kamar luas ideal untuk keluarga, dilengkapi 1 ranjang besar dan 2 ranjang single.</p>
                         <div class="flex justify-between items-center mt-4">
                              <span class="text-xl font-bold text-red-600">Rp 850.000 / malam</span>
-                            <a href="pemesanan.php?tipe=Family" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
+                            <a href="guest/pemesanan.php?tipe=Family" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
                         </div>
                     </div>
                 </div>
@@ -81,7 +81,7 @@
                         <p class="text-gray-600 mb-4">Kenyamanan maksimal dengan satu ranjang berukuran besar, ideal untuk pasangan.</p>
                         <div class="flex justify-between items-center mt-4">
                             <span class="text-xl font-bold text-red-600">Rp 550.000 / malam</span>
-                            <a href="pemesanan.php?tipe=Double" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
+                            <a href="guest/pemesanan.php?tipe=Double" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
                         </div>
                     </div>
                 </div>
@@ -93,7 +93,7 @@
                         <p class="text-gray-600 mb-4">Pilihan ekonomis untuk perjalanan solo dengan satu ranjang single.</p>
                         <div class="flex justify-between items-center mt-4">
                             <span class="text-xl font-bold text-red-600">Rp 300.000 / malam</span>
-                            <a href="pemesanan.php?tipe=Single" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
+                            <a href="guest/pemesanan.php?tipe=Single" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
                         </div>
                     </div>
                 </div>
@@ -109,17 +109,17 @@
                 </h2>
                 <p class="text-gray-600 mb-8 text-center">Masukkan kode booking dan email/nomor telepon yang terdaftar untuk melihat detail reservasi Anda saat ini.</p>
                 
-                <form action="cek_pesanan_detail.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-6 bg-blue-50 rounded-lg shadow-inner">
+                <form action="guest/cek_pesanan_detail.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-6 bg-blue-50 rounded-lg shadow-inner">
                     
                     <div>
                         <label for="kode_booking" class="block text-sm font-medium text-gray-700 mb-1">Kode Booking</label>
-                        <input type="text" id="kode_booking" name="kode_booking" required placeholder="Contoh: CNI20251234"
+                        <input type="text" id="kode_booking" name="kode" required placeholder="Contoh: CNI20251234"
                             class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                     </div>
                     
                     <div>
                         <label for="kontak_pesanan" class="block text-sm font-medium text-gray-700 mb-1">Email / No. Telepon</label>
-                        <input type="text" id="kontak_pesanan" name="kontak_pesanan" required placeholder="email@contoh.com atau 0812xxxxxx"
+                        <input type="text" id="kontak_pesanan" name="kontak" required placeholder="email@contoh.com atau 0812xxxxxx"
                             class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                     </div>
 

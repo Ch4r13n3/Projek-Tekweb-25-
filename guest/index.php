@@ -8,8 +8,8 @@ function formatRupiah($angka) {
     return 'Rp ' . number_format($angka, 0, ',', '.');
 }
 
-$query_populer = "SELECT id_tipe_kamar, nama_tipe, deskripsi, harga_per_malam FROM tipe_kamar ORDER BY harga_per_malam DESC LIMIT 3";
-$result_populer = $conn->query($query_populer);
+// Pastikan nama kolom 'foto' sesuai dengan yang ada di struktur tabel 'tipe_kamar' Anda
+$query_populer = "SELECT id_tipe_kamar, nama_tipe, deskripsi, harga_per_malam, foto FROM tipe_kamar ORDER BY harga_per_malam DESC LIMIT 3";$result_populer = $conn->query($query_populer);
 $kamar_populer = $result_populer->fetch_all(MYSQLI_ASSOC);
 
 // Catatan: Jika Anda sudah memiliki koneksi dan query DB, hapus simulasi ini.
@@ -22,6 +22,7 @@ $kamar_populer = $result_populer->fetch_all(MYSQLI_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Nine In - Pesan Kamar Hotel Terbaik</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .card-room:hover {
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -98,24 +99,59 @@ $kamar_populer = $result_populer->fetch_all(MYSQLI_ASSOC);
                 <?php if (!empty($kamar_populer)): ?>
                     <?php foreach ($kamar_populer as $kamar): ?>
                         <div class="bg-white rounded-xl shadow-lg overflow-hidden card-room transition duration-300">
-                            <img src="https://via.placeholder.com/600x400/38bdf8/ffffff?text=<?php echo urlencode($kamar['nama_tipe']); ?>" alt="<?php echo htmlspecialchars($kamar['nama_tipe']); ?>" class="w-full h-48 object-cover">
+                            
+                            <?php 
+                            // 1. Definisikan folder (keluar dari 'guest' masuk ke 'uploads')
+                            $folder_uploads = "../uploads/"; 
+                            
+                            // 2. Gunakan null coalescing (??) agar tidak error jika key tidak ada
+                            // GANTI 'foto' di bawah ini dengan nama kolom asli di database Anda (misal: 'gambar')
+                            $nama_file = $kamar['foto'] ?? ''; 
+                            
+                            // 3. Logika pengecekan file
+                            if (!empty($nama_file) && file_exists($folder_uploads . $nama_file)) {
+                                $sumber_gambar = $folder_uploads . $nama_file;
+                            } else {
+                                $sumber_gambar = "https://via.placeholder.com/600x400/cbd5e1/64748b?text=Gambar+Tidak+Tersedia";
+                            }
+                        ?>
+
+
+                            <div class="relative h-52 overflow-hidden">
+                                <img src="<?= $sumber_gambar; ?>" 
+     alt="<?= htmlspecialchars($kamar['nama_tipe']?? 'Kamar'); ?>" 
+     class="w-full h-52 object-cover object-center transition-transform duration-500 hover:scale-110">
+                                <div class="absolute top-4 right-4 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md">
+                                    Populer
+                                </div>
+                            </div>
+
                             <div class="p-5">
-                                <h3 class="text-xl font-bold text-gray-900 mb-2"><?php echo htmlspecialchars($kamar['nama_tipe']); ?></h3>
-                                <p class="text-sm text-gray-600 mb-4"><?php echo htmlspecialchars($kamar['deskripsi_singkat'] ?? 'Deskripsi belum tersedia.'); ?></p>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-2xl font-bold text-red-600"><?php echo formatRupiah($kamar['harga_per_malam']); ?></span>
-                                    <a href="pemesanan.php?tipe_id=<?php echo $kamar['id_tipe_kamar']; ?>&checkin=<?php echo date('Y-m-d'); ?>&checkout=<?php echo date('Y-m-d', strtotime('+1 day')); ?>&jml=1" 
-                                       class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">
-                                       Pesan Sekarang
+                                <h3 class="text-xl font-bold text-gray-900 mb-2"><?= htmlspecialchars($kamar['nama_tipe']); ?></h3>
+                                <p class="text-xs text-gray-500 mb-4 line-clamp-2">
+                                    <?= htmlspecialchars($kamar['deskripsi'] ?? 'Deskripsi belum tersedia.'); ?>
+                                </p>
+
+                                <div class="flex items-center gap-3 mb-6 text-gray-400 text-[11px]">
+                                    <span class="flex items-center gap-1"><i class="fas fa-wifi"></i> WiFi</span>
+                                    <span class="flex items-center gap-1"><i class="fas fa-snowflake"></i> AC</span>
+                                    <span class="flex items-center gap-1"><i class="fas fa-coffee"></i> Breakfast</span>
+                                </div>
+                                
+                                <div class="flex justify-between items-end border-t border-gray-100 pt-4">
+                                    <div>
+                                        <span class="block text-[10px] text-gray-400 uppercase font-bold tracking-wider">Mulai Dari</span>
+                                        <span class="text-xl font-extrabold text-blue-700"><?= formatRupiah($kamar['harga_per_malam']); ?></span>
+                                        <span class="text-[10px] text-gray-400">/malam</span>
+                                    </div>
+                                    <a href="pemesanan.php?tipe_id=<?= $kamar['id_tipe_kamar']; ?>" 
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition duration-300 shadow-lg shadow-blue-100">
+                                    Pesan Sekarang
                                     </a>
                                 </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="md:col-span-3 text-center p-6 bg-yellow-100 text-yellow-800 rounded-lg">
-                        Tidak ada data kamar populer yang ditemukan di database.
-                    </div>
                 <?php endif; ?>
             </div>
         </section>

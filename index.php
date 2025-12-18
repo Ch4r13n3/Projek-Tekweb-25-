@@ -1,3 +1,28 @@
+<?php
+// guest/index.php
+session_start();
+include 'koneksi.php';
+// 1. Tambahkan Fungsi Format Rupiah jika belum ada
+if (!function_exists('formatRupiah')) {
+    function formatRupiah($angka) {
+        return 'Rp ' . number_format($angka, 0, ',', '.');
+    }
+}
+
+// 2. QUERY SQL: Ambil data kamar dari database
+// Pastikan nama kolom 'foto' sesuai dengan yang ada di database Anda
+$query_populer = "SELECT id_tipe_kamar, nama_tipe, deskripsi, harga_per_malam, foto FROM tipe_kamar ORDER BY harga_per_malam DESC LIMIT 3";
+$result_populer = $conn->query($query_populer);
+
+// Masukkan hasil query ke dalam array $kamar_populer
+$kamar_populer = [];
+if ($result_populer && $result_populer->num_rows > 0) {
+    while($row = $result_populer->fetch_assoc()) {
+        $kamar_populer[] = $row;
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -55,49 +80,67 @@
 
     <main class="container mx-auto px-6 py-12">
         
-        <section id="populer" class="py-16">
+        <section id="populer" class="mb-16">
             <h2 class="text-3xl font-extrabold text-gray-800 mb-8 text-center">
                 <span class="text-blue-600">Kamar Populer</span> ✨ Pilihan Terbaik Kami
             </h2>
-            
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                
-                <div class="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition duration-300">
-                    <img src="https://via.placeholder.com/600x400/38bdf8/ffffff?text=Family+Room" alt="Family Room" class="w-full h-48 object-cover">
-                    <div class="p-5">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-900">Family Room</h3>
-                        <p class="text-gray-600 mb-4">Kamar luas ideal untuk keluarga, dilengkapi 1 ranjang besar dan 2 ranjang single.</p>
-                        <div class="flex justify-between items-center mt-4">
-                             <span class="text-xl font-bold text-red-600">Rp 850.000 / malam</span>
-                            <a href="guest/pemesanan.php?tipe=Family" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
-                        </div>
-                    </div>
-                </div>
+                <?php if (!empty($kamar_populer)): ?>
+                    <?php foreach ($kamar_populer as $kamar): ?>
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden card-room transition duration-300">
+                            
+                            <?php 
+                                // PERBAIKAN PATH GAMBAR
+                                // Karena index.php ada di folder 'guest', kita keluar dulu (../) baru masuk ke 'uploads/'
+                                $folder_uploads = "uploads/"; 
+                                $nama_file = $kamar['foto']; // Mengambil nama file dari database
+                                
+                                // Cek apakah file benar-benar ada di folder uploads
+                                if (!empty($nama_file) && file_exists($folder_uploads . $nama_file)) {
+                                    $sumber_gambar = $folder_uploads . $nama_file;
+                                } else {
+                                    // Gambar cadangan jika file tidak ditemukan
+                                    $sumber_gambar = "https://via.placeholder.com/600x400/cbd5e1/64748b?text=Foto+Tidak+Tersedia";
+                                }
+                            ?>
 
-                <div class="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition duration-300">
-                    <img src="https://via.placeholder.com/600x400/34d399/ffffff?text=Double-Bed+Room" alt="Double-bed Room" class="w-full h-48 object-cover">
-                    <div class="p-5">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-900">Double-bed Room</h3>
-                        <p class="text-gray-600 mb-4">Kenyamanan maksimal dengan satu ranjang berukuran besar, ideal untuk pasangan.</p>
-                        <div class="flex justify-between items-center mt-4">
-                            <span class="text-xl font-bold text-red-600">Rp 550.000 / malam</span>
-                            <a href="guest/pemesanan.php?tipe=Double" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition duration-300">
-                    <img src="https://via.placeholder.com/600x400/a78bfa/ffffff?text=Single+Bed+Room" alt="Single Bed Room" class="w-full h-48 object-cover">
-                    <div class="p-5">
-                        <h3 class="text-2xl font-semibold mb-2 text-gray-900">Single Bed Room</h3>
-                        <p class="text-gray-600 mb-4">Pilihan ekonomis untuk perjalanan solo dengan satu ranjang single.</p>
-                        <div class="flex justify-between items-center mt-4">
-                            <span class="text-xl font-bold text-red-600">Rp 300.000 / malam</span>
-                            <a href="guest/pemesanan.php?tipe=Single" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition duration-300">Pesan Sekarang</a>
-                        </div>
-                    </div>
-                </div>
+                            <div class="relative h-52 overflow-hidden">
+                                <img src="<?= $sumber_gambar; ?>" 
+                                    alt="<?= htmlspecialchars($kamar['nama_tipe']); ?>" 
+                                    class="w-full h-full object-cover transition-transform duration-500 hover:scale-110">
+                                <div class="absolute top-4 right-4 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-md">
+                                    Populer
+                                </div>
+                            </div>
 
+                            <div class="p-5">
+                                <h3 class="text-xl font-bold text-gray-900 mb-2"><?= htmlspecialchars($kamar['nama_tipe']); ?></h3>
+                                <p class="text-xs text-gray-500 mb-4 line-clamp-2">
+                                    <?= htmlspecialchars($kamar['deskripsi'] ?? 'Deskripsi belum tersedia.'); ?>
+                                </p>
+
+                                <div class="flex items-center gap-3 mb-6 text-gray-400 text-[11px]">
+                                    <span class="flex items-center gap-1"><i class="fas fa-wifi"></i> WiFi</span>
+                                    <span class="flex items-center gap-1"><i class="fas fa-snowflake"></i> AC</span>
+                                    <span class="flex items-center gap-1"><i class="fas fa-coffee"></i> Breakfast</span>
+                                </div>
+                                
+                                <div class="flex justify-between items-end border-t border-gray-100 pt-4">
+                                    <div>
+                                        <span class="block text-[10px] text-gray-400 uppercase font-bold tracking-wider">Mulai Dari</span>
+                                        <span class="text-xl font-extrabold text-blue-700"><?= formatRupiah($kamar['harga_per_malam']); ?></span>
+                                        <span class="text-[10px] text-gray-400">/malam</span>
+                                    </div>
+                                    <a href="pemesanan.php?tipe_id=<?= $kamar['id_tipe_kamar']; ?>" 
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition duration-300 shadow-lg shadow-blue-100">
+                                    Pesan Sekarang
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </section>
 

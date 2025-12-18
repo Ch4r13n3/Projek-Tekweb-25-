@@ -1,48 +1,40 @@
 <?php
 // guest/cek_pesanan_detail.php
 session_start();
-// Sesuaikan path koneksi jika berbeda
 require '../koneksi.php'; 
 
 // Fungsi format Rupiah
-function formatRupiah($angka) {
-    return 'Rp ' . number_format($angka, 0, ',', '.');
+if (!function_exists('formatRupiah')) {
+    function formatRupiah($angka) {
+        return 'Rp ' . number_format($angka, 0, ',', '.');
+    }
 }
 
-$kode_booking = $_GET['kode'] ?? null;
-// Ambil variabel 'kontak' yang dikirim dari form index.php
-$kontak = $_GET['kontak'] ?? null; 
+// PERBAIKAN: Gunakan $_POST (karena form index.php menggunakan method="POST")
+// Atau gunakan $_REQUEST agar fleksibel menerima POST maupun GET
+$kode_booking = $_REQUEST['kode'] ?? null;
+$kontak = $_REQUEST['kontak'] ?? null; 
 
 $reservasi = null;
 $error_message = null;
 
-// PERBAIKAN KRITIS #1: Validasi harus mencakup kode booking DAN kontak
+// Validasi input
 if (!$kode_booking || !$kontak) {
-    // Jika salah satu (kode atau kontak) hilang
-    $error_message = "Kode Booking dan Kontak Pemesan harus diisi. Harap masukkan kedua data yang valid.";
+    $error_message = "Kode Booking dan Kontak Pemesan harus diisi untuk melihat detail pesanan.";
 } else {
-    // 1. Ambil data reservasi dari database
-    // Menggunakan JOIN untuk mendapatkan nama tipe kamar
-    // $query = "SELECT r.*, tk.nama_tipe 
-    //           FROM reservasi r 
-    //           JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
-    //           WHERE r.kode_booking = ? 
-    //           AND (r.email_pemesan = ? OR r.telp_pemesan = ?);";
-
+    // Ambil data reservasi dengan JOIN ke tipe_kamar dan kamar
     $query = "SELECT r.*, tk.nama_tipe, k.nomor_kamar, k.lantai 
-          FROM reservasi r 
-          JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
-          LEFT JOIN kamar k ON r.id_kamar_ditempati = k.id_kamar 
-          WHERE r.kode_booking = ? 
-          AND (r.email_pemesan = ? OR r.telp_pemesan = ?);";
+              FROM reservasi r 
+              JOIN tipe_kamar tk ON r.id_tipe_kamar = tk.id_tipe_kamar 
+              LEFT JOIN kamar k ON r.id_kamar_ditempati = k.id_kamar 
+              WHERE r.kode_booking = ? 
+              AND (r.email_pemesan = ? OR r.telp_pemesan = ?)";
 
-    
     $stmt = $conn->prepare($query);
     
     if (!$stmt) {
-        $error_message = "Terjadi kesalahan pada persiapan query database: " . $conn->error;
+        $error_message = "Terjadi kesalahan sistem: " . $conn->error;
     } else {
-        // Bind 3 parameter (kode_booking, kontak, kontak)
         $stmt->bind_param("sss", $kode_booking, $kontak, $kontak); 
         $stmt->execute();
         $result = $stmt->get_result();
@@ -50,26 +42,22 @@ if (!$kode_booking || !$kontak) {
         $stmt->close();
 
         if (!$reservasi) {
-            // Pesan error lebih informatif setelah verifikasi kontak
-            $error_message = "Data pemesanan dengan kode **" . htmlspecialchars($kode_booking) . "** dan kontak tersebut tidak ditemukan. Pastikan kontak yang Anda masukkan sesuai dengan email atau nomor telepon saat pemesanan.";
+            $error_message = "Data tidak ditemukan. Pastikan Kode Booking dan Kontak (Email/HP) sudah benar.";
         }
     }
 }
 
-// Fungsi pembantu untuk menentukan kelas warna berdasarkan status
 function get_status_class($status) {
     switch ($status) {
         case 'Lunas':
         case 'Check-in':
-            return ['bg' => 'bg-green-50', 'text' => 'text-green-800'];
+            return ['bg' => 'bg-green-100', 'text' => 'text-green-800'];
         case 'Menunggu Verifikasi':
-            return ['bg' => 'bg-yellow-50', 'text' => 'text-yellow-800'];
+            return ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800'];
         case 'Belum Bayar':
-            return ['bg' => 'bg-red-50', 'text' => 'text-red-800'];
-        case 'Batal':
-            return ['bg' => 'bg-gray-200', 'text' => 'text-gray-800'];
+            return ['bg' => 'bg-red-100', 'text' => 'text-red-800'];
         default:
-            return ['bg' => 'bg-blue-50', 'text' => 'text-blue-800'];
+            return ['bg' => 'bg-gray-100', 'text' => 'text-gray-800'];
     }
 }
 ?>
@@ -90,124 +78,96 @@ function get_status_class($status) {
                 <li><a href="index.php" class="text-gray-700 hover:text-blue-600 font-medium">Home</a></li>
                 <li><a href="index.php#populer" class="text-gray-700 hover:text-blue-600 font-medium">Kamar Populer</a></li>
                 <li><a href="index.php#cek-pesanan" class="text-gray-700 hover:text-blue-600 font-medium">Cek Pesanan Saya</a></li>
-                <li><a href="../login.php" class="bg-[#134686] hover:bg-[#27548A] text-white font-bold py-2 px-4 rounded-lg transition duration-300">Login</a></li>
+                <li><a href="../login.php" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Login</a></li>
             </ul>
         </div>
     </nav>
 
     <main class="container mx-auto px-6 py-12">
         <div class="max-w-xl mx-auto">
-            <?php 
-            // VITAL: BLOK INI MENAMPILKAN PESAN SUKSES DARI UPLOAD_BUKTI_BAYAR.PHP
-            if (isset($_SESSION['success_message'])): ?>
-                <div class="p-4 mb-6 text-sm text-green-800 rounded-lg bg-green-50 border border-green-300 font-medium" role="alert">
-                    <p class="font-bold">Konfirmasi Berhasil:</p>
-                    <?php 
-                    echo htmlspecialchars($_SESSION['success_message']);
-                    unset($_SESSION['success_message']); // PENTING: Hapus pesan agar tidak muncul lagi
-                    ?>
+            
+            <?php if (isset($_SESSION['success_message'])): ?>
+                <div class="p-4 mb-6 text-green-800 bg-green-50 rounded-lg border border-green-200">
+                    <?php echo $_SESSION['success_message']; unset($_SESSION['success_message']); ?>
                 </div>
-            <?php endif;
-            ?>
+            <?php endif; ?>
             
             <?php if ($error_message): ?>
-                <div class="p-8 bg-white rounded-xl shadow-2xl text-center border-t-8 border-red-500">
-                    <h1 class="text-3xl font-extrabold text-gray-800 mb-4">Pencarian Gagal!</h1>
-                    <p class="text-red-700 mb-6 font-medium"><?php echo htmlspecialchars($error_message); ?></p>
-                    <a href="index.php#cek-pesanan" class="mt-8 inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-lg">Coba Lagi</a>
+                <div class="p-8 bg-white rounded-xl shadow-lg text-center border-t-4 border-red-500">
+                    <div class="text-red-500 mb-4">
+                        <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">Pencarian Gagal</h1>
+                    <p class="text-gray-600 mb-6"><?php echo $error_message; ?></p>
+                    <a href="index.php#cek-pesanan" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">Coba Lagi</a>
                 </div>
             <?php else: ?>
-                <?php 
-                // Amankan data untuk URL 
-                $kode_url = urlencode($reservasi['kode_booking']);
-                $kontak_url = urlencode($kontak); 
-                $status_pembayaran_class = get_status_class($reservasi['status_pembayaran']);
-                $status_reservasi_class = get_status_class($reservasi['status_reservasi'] ?? ''); // Asumsi status reservasi juga bisa diwarnai
-                ?>
-                <div class="p-8 bg-white rounded-xl shadow-2xl border-t-8 border-blue-600">
-                    <h1 class="text-3xl font-extrabold text-gray-800 mb-2">Detail Pesanan Anda</h1>
-                    <div class="bg-blue-50 p-6 rounded-lg mb-6 border border-blue-300 text-center">
-                        <p class="text-sm font-semibold text-blue-800">KODE BOOKING:</p>
-                        <p class="text-4xl font-extrabold text-blue-600 mt-2 tracking-wider"><?php echo htmlspecialchars($reservasi['kode_booking']); ?></p>
+                
+                <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-100">
+                    <div class="bg-blue-600 p-6 text-white text-center">
+                        <p class="text-sm opacity-80 uppercase tracking-widest mb-1">Kode Booking Anda</p>
+                        <h2 class="text-3xl font-black"><?php echo htmlspecialchars($reservasi['kode_booking']); ?></h2>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="p-4 rounded-lg text-center <?php echo $status_pembayaran_class['bg'] . ' ' . $status_pembayaran_class['text']; ?>">
-                            <p class="text-sm font-semibold">Status Pembayaran</p>
-                            <p class="text-xl font-bold mt-1"><?php echo htmlspecialchars($reservasi['status_pembayaran']); ?></p>
+                    <div class="p-6">
+                        <div class="flex gap-2 mb-6">
+                            <?php $s_pay = get_status_class($reservasi['status_pembayaran']); ?>
+                            <div class="flex-1 text-center p-2 rounded-lg <?php echo $s_pay['bg'] . ' ' . $s_pay['text']; ?>">
+                                <p class="text-[10px] uppercase font-bold">Pembayaran</p>
+                                <p class="font-bold"><?php echo $reservasi['status_pembayaran']; ?></p>
+                            </div>
+                            <div class="flex-1 text-center p-2 rounded-lg bg-blue-50 text-blue-800">
+                                <p class="text-[10px] uppercase font-bold">Status Reservasi</p>
+                                <p class="font-bold"><?php echo $reservasi['status_reservasi']; ?></p>
+                            </div>
                         </div>
-                        <div class="p-4 rounded-lg text-center <?php echo $status_reservasi_class['bg'] . ' ' . $status_reservasi_class['text']; ?>">
-                            <p class="text-sm font-semibold">Status Reservasi</p>
-                            <p class="text-xl font-bold mt-1"><?php echo htmlspecialchars($reservasi['status_reservasi']); ?></p>
+
+                        <div class="space-y-4">
+                            <div class="flex justify-between border-b pb-2">
+                                <span class="text-gray-500">Tipe Kamar</span>
+                                <span class="font-semibold"><?php echo $reservasi['nama_tipe']; ?></span>
+                            </div>
+                            <div class="flex justify-between border-b pb-2">
+                                <span class="text-gray-500">No. Kamar / Lantai</span>
+                                <span class="font-semibold"><?php echo ($reservasi['nomor_kamar'] ?? '-') . ' / ' . ($reservasi['lantai'] ?? '-'); ?></span>
+                            </div>
+                            <div class="flex justify-between border-b pb-2">
+                                <span class="text-gray-500">Check-in</span>
+                                <span class="font-semibold text-blue-600"><?php echo date('d M Y', strtotime($reservasi['tanggal_checkin'])); ?></span>
+                            </div>
+                            <div class="flex justify-between border-b pb-2">
+                                <span class="text-gray-500">Check-out</span>
+                                <span class="font-semibold text-red-600"><?php echo date('d M Y', strtotime($reservasi['tanggal_checkout'])); ?></span>
+                            </div>
+                            <div class="flex justify-between pt-2">
+                                <span class="text-gray-800 font-bold">Total Bayar</span>
+                                <span class="text-xl font-bold text-blue-600"><?php echo formatRupiah($reservasi['total_bayar']); ?></span>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="p-4 bg-gray-100 rounded-lg mb-6 text-center">
-                        <p class="text-sm font-semibold text-gray-800">TOTAL PEMBAYARAN</p>
-                        <p class="text-3xl font-extrabold text-red-600 mt-1"><?php echo formatRupiah($reservasi['total_bayar']); ?></p>
-                    </div>
 
-                    <div class="space-y-3 p-4 bg-gray-50 rounded-lg border mb-6">
-                        <p class="font-bold text-gray-700 border-b pb-2">Rincian Kamar & Tanggal</p>
-                        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
-                            <li><strong>Tipe Kamar:</strong> <?php echo htmlspecialchars($reservasi['nama_tipe']); ?></li>
-                            <li><strong>Jumlah Kamar Dipesan:</strong> <?php echo $reservasi['jumlah_tamu']; ?></li>
-                            <li><strong>Nomor Kamar: </strong><?php echo $reservasi['nomor_kamar']; ?></li>
-                            <li><strong>Tanggal Check-in:</strong> <?php echo htmlspecialchars($reservasi['tanggal_checkin']); ?></li>
-                            <li><strong>Tanggal Check-out:</strong> <?php echo htmlspecialchars($reservasi['tanggal_checkout']); ?></li>
-                            <li><strong>Metode Pembayaran:</strong> <?php echo htmlspecialchars($reservasi['metode_pembayaran']); ?></li>
-                        </ul>
-                    </div>
+                        <div class="mt-8 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                            <p class="text-sm font-bold text-gray-700 mb-2">Informasi Penting:</p>
+                            <div class="text-sm text-gray-600 italic">
+                                <?php if ($reservasi['status_pembayaran'] === 'Belum Bayar' && $reservasi['metode_pembayaran'] === 'Transfer Bank'): ?>
+                                    Silakan transfer ke rekening hotel dan 
+                                    <a href="upload_bukti_bayar.php?kode=<?= urlencode($kode_booking) ?>&kontak=<?= urlencode($kontak) ?>" class="text-blue-600 font-bold underline">Upload Bukti di Sini</a>.
+                                <?php elseif ($reservasi['status_pembayaran'] === 'Belum Bayar'): ?>
+                                    Silakan lakukan pembayaran langsung saat tiba di resepsionis.
+                                <?php else: ?>
+                                    Simpan halaman ini atau catat Kode Booking untuk proses Check-in.
+                                <?php endif; ?>
+                            </div>
+                        </div>
 
-                    <div class="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                        <p class="font-bold text-gray-700 border-b pb-2">Informasi Pemesan</p>
-                        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
-                            <li><strong>Nama:</strong> <?php echo htmlspecialchars($reservasi['nama_pemesan']); ?></li>
-                            <li><strong>KTP:</strong> <?php echo htmlspecialchars($reservasi['ktp_pemesan']); ?></li>
-                            <li><strong>Email:</strong> <?php echo htmlspecialchars($reservasi['email_pemesan']); ?></li>
-                            <li><strong>Telepon:</strong> <?php echo htmlspecialchars($reservasi['telp_pemesan']); ?></li>
-                        </ul>
-                    </div>
-                    
-                    <div class="space-y-3 mt-6 p-4 bg-red-100 rounded-lg border border-red-400">
-                        <p class="font-bold text-red-800 border-b pb-2">Aksi Selanjutnya</p>
-                        <ul class="list-disc list-inside text-sm text-red-700 space-y-1">
-                            <?php if ($reservasi['metode_pembayaran'] === 'Transfer Bank' && $reservasi['status_pembayaran'] === 'Belum Bayar'): ?>
-                                <li>
-                                    **Pembayaran Belum Lunas (Transfer Bank):** Pesanan Anda belum lunas. Silakan lakukan transfer dan 
-                                    <a href="upload_bukti_bayar.php?kode=<?php echo $kode_url; ?>&kontak=<?php echo $kontak_url; ?>" class="text-blue-600 font-bold hover:underline">UPLOAD BUKTI TRANSFER DI SINI</a> 
-                                    sebelum batas waktu pembayaran.
-                                </li>
-                            <?php elseif ($reservasi['metode_pembayaran'] === 'Bayar Di Tempat' && $reservasi['status_pembayaran'] === 'Belum Bayar'): ?>
-                                <li>
-                                    **Bayar Di Tempat:** Pembayaran penuh akan dilakukan saat Anda Check-in di hotel. Pastikan Anda membawa kode booking ini.
-                                </li>
-                            <?php elseif ($reservasi['status_pembayaran'] === 'Menunggu Verifikasi'): ?>
-                                <li>
-                                    **Menunggu Verifikasi:** Bukti pembayaran Anda sedang dicek oleh tim kami. Harap tunggu konfirmasi lebih lanjut.
-                                </li>
-                            <?php else: ?>
-                                <li>
-                                    **Pembayaran Lunas:** Pesanan Anda telah lunas. Anda dapat langsung Check-in pada tanggal yang ditentukan.
-                                </li>
-                            <?php endif; ?>
-                        </ul>
-                    </div>
-
-                    <div class="mt-8 text-center">
-                        <a href="index.php" class="inline-block bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-lg">
-                            Selesai & Kembali ke Beranda
-                        </a>
+                        <a href="index.php" class="block w-full text-center mt-6 bg-gray-800 text-white py-3 rounded-lg font-bold hover:bg-gray-900 transition">Kembali ke Beranda</a>
                     </div>
                 </div>
             <?php endif; ?>
         </div>
     </main>
 
-    <footer class="bg-gray-800 text-white mt-12">
-        <div class="container mx-auto px-6 py-4 text-center">
-            <p>&copy; 2025 Cloud Nine In. All rights reserved.</p>
-        </div>
+    <footer class="text-center py-10 text-gray-400 text-sm">
+        &copy; 2025 Cloud Nine In. All rights reserved.
     </footer>
 </body>
 </html>

@@ -52,7 +52,7 @@ if ($result_populer && $result_populer->num_rows > 0) {
             <h1 class="text-5xl font-bold mb-4">Selamat Datang di Cloud Nine In</h1>
             <p class="text-xl mb-10">Temukan kamar impian Anda dengan harga terbaik.</p>
 
-            <form action="guest/hasil_pencarian.php" method="GET" 
+            <form action="hasil_pencarian.php" method="GET" 
                  class="bg-white text-black p-6 rounded-lg shadow-xl max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 
                 <div class="text-left">
@@ -132,10 +132,22 @@ if ($result_populer && $result_populer->num_rows > 0) {
                                         <span class="text-xl font-extrabold text-blue-700"><?= formatRupiah($kamar['harga_per_malam']); ?></span>
                                         <span class="text-[10px] text-gray-400">/malam</span>
                                     </div>
-                                    <a href="pemesanan.php?tipe_id=<?= $kamar['id_tipe_kamar']; ?>" 
-                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition duration-300 shadow-lg shadow-blue-100">
-                                    Pesan Sekarang
-                                    </a>
+                                    <?php 
+// Cek apakah sudah login (menggunakan session yang sudah dimulai di atas)
+if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true) {
+    // Jika sudah login, arahkan langsung ke halaman pemesanan
+    $url_tujuan = "pemesanan.php?tipe_id=" . $kamar['id_tipe_kamar'];
+} else {
+    // Jika belum login, arahkan ke login.php (di root) dengan pesan
+    // Catatan: sesuaikan path '../login.php' jika posisi login.php Anda berbeda
+    $url_tujuan = "login.php?pesan=wajib_login";
+}
+?>
+
+<a href="<?= $url_tujuan; ?>" 
+   class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition duration-300 shadow-lg shadow-blue-100">
+   Pesan Sekarang
+</a>
                                 </div>
                             </div>
                         </div>
@@ -152,7 +164,7 @@ if ($result_populer && $result_populer->num_rows > 0) {
                 </h2>
                 <p class="text-gray-600 mb-8 text-center">Masukkan kode booking dan email/nomor telepon yang terdaftar untuk melihat detail reservasi Anda saat ini.</p>
                 
-                <form action="guest/cek_pesanan_detail.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-6 bg-blue-50 rounded-lg shadow-inner">
+                <form action="cek_pesanan.php" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-6 bg-blue-50 rounded-lg shadow-inner">
                     
                     <div>
                         <label for="kode_booking" class="block text-sm font-medium text-gray-700 mb-1">Kode Booking</label>

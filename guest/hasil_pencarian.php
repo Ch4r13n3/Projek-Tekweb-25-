@@ -94,7 +94,8 @@ if (empty($tgl_in) || empty($tgl_out) || strtotime($tgl_in) >= strtotime($tgl_ou
                 if (isset($_SESSION['loggedin'])): 
                 ?>
                     <a href="../logout.php"
-                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-md">
+                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center shadow-md">
+                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                         Logout
                     </a>
                 <?php else: ?>
